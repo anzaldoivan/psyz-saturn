@@ -1336,8 +1336,8 @@ void SetFogNearFar(long a, long b, long h) {
     DQB = ((fogFar << 12) / range) << 12;
 }
 
-void Psyz_GteLdRgb(CVECTOR* v) { *(unsigned int*)&RGBC = *(unsigned int*)v; }
-void Psyz_GteStRgb(CVECTOR* v) { *(unsigned int*)v = RGB2; }
+void Psyz_GteLdRgb(CVECTOR* v) { memcpy(&RGBC, v, sizeof(RGBC)); }
+void Psyz_GteStRgb(CVECTOR* v) { memcpy(v, &RGB2, sizeof(RGB2)); }
 
 void Psyz_GteLdRgb3(CVECTOR* v0, CVECTOR* v1, CVECTOR* v2) {
     RGB0 = *(unsigned int*)v0;
@@ -2877,6 +2877,22 @@ long NormalClip(long sxy0, long sxy1, long sxy2) {
 
 void NormalColorCol(SVECTOR* v0, CVECTOR* v1, CVECTOR* v2) {
     Psyz_GteNormalColorCol(v0, v1, v2);
+}
+
+void NormalColorCol3(SVECTOR* v0, SVECTOR* v1, SVECTOR* v2, CVECTOR* base,
+                     CVECTOR* out0, CVECTOR* out1, CVECTOR* out2) {
+    Psyz_GteNormalColorCol3(v0, v1, v2, base, out0, out1, out2);
+}
+
+void NormalColor3(SVECTOR* v0, SVECTOR* v1, SVECTOR* v2, CVECTOR* unused,
+                  CVECTOR* out0, CVECTOR* out1, CVECTOR* out2) {
+    (void)unused;
+    Psyz_GteNormalColor3(v0, v1, v2, out0, out1, out2);
+}
+
+void NormalColor(SVECTOR* normal, CVECTOR* unused, CVECTOR* output) {
+    (void)unused;
+    Psyz_GteNormalColor(normal, output);
 }
 
 void NormalColorDpq(SVECTOR* v0, CVECTOR* v1, long p, CVECTOR* v2) {
