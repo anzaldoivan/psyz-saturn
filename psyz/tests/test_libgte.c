@@ -12,12 +12,14 @@
 #define GTE_SET_DQA(v) Psyz_GteCtrlWrite(27, (unsigned int)(v))
 #define GTE_SET_DQB(v) Psyz_GteCtrlWrite(28, (unsigned int)(v))
 #define GTE_READ_IR0(v) ((v) = (int)Psyz_GteDataRead(8))
+#define GTE_READ_DQB(v) ((v) = (int)Psyz_GteCtrlRead(28))
 #else
 #define GTE_SET_ZSF3(v) __asm__ volatile("ctc2	%0, $29" : : "r"(v))
 #define GTE_SET_ZSF4(v) __asm__ volatile("ctc2	%0, $30" : : "r"(v))
 #define GTE_SET_DQA(v) __asm__ volatile("ctc2	%0, $27" : : "r"(v))
 #define GTE_SET_DQB(v) __asm__ volatile("ctc2	%0, $28" : : "r"(v))
 #define GTE_READ_IR0(v) __asm__ volatile("mfc2	%0, $8;nop" : "=r"(v))
+#define GTE_READ_DQB(v) __asm__ volatile("cfc2	%0, $28;nop" : "=r"(v))
 #endif
 
 ZTEST_SETUP(gte) { InitGeom(); }
@@ -457,6 +459,47 @@ ZTEST(gte, nclip_large_coords) {
 
 ZTEST(gte, nclip_overflow) {
     zexpect_s32_eq(-131071, NormalClip(0x7FFF7FFF, 0x7FFF8000, 0x80007FFF));
+}
+
+static void ranclip4_setup(void) {
+    MATRIX m = {{{0x1000, 0, 0}, {0, 0x1000, 0}, {0, 0, 0x1000}},
+                {0, 0, 16000}};
+    SetRotMatrix(&m);
+    SetTransMatrix(&m);
+}
+
+ZTEST(gte, rotaveragenclip4_returns_nclip) {
+    SVECTOR v[4] = {{0, 0, 0}, {1600, 0, 0}, {0, 1600, 0}, {1600, 1600, 0}};
+    int sxy[4], p, otz, flag;
+    ranclip4_setup();
+    zexpect_s32_eq(
+        10000, RotAverageNclip4(&v[0], &v[1], &v[2], &v[3], &sxy[0], &sxy[1],
+                                &sxy[2], &sxy[3], &p, &otz, &flag));
+    zexpect_s32_eq(
+        -10000, RotAverageNclip4(&v[0], &v[2], &v[1], &v[3], &sxy[0], &sxy[1],
+                                 &sxy[2], &sxy[3], &p, &otz, &flag));
+}
+
+ZTEST(gte, rotaveragenclip4_outputs) {
+    SVECTOR v[4] = {{0, 0, 0}, {1600, 0, 0}, {0, 1600, 0}, {1600, 1600, 0}};
+    int sxy[4], p, otz, flag;
+    ranclip4_setup();
+    RotAverageNclip4(&v[0], &v[1], &v[2], &v[3], &sxy[0], &sxy[1], &sxy[2],
+                     &sxy[3], &p, &otz, &flag);
+    zexpect_s32_eq(0x00000000, sxy[0]);
+    zexpect_s32_eq(0x00000064, sxy[1]);
+    zexpect_s32_eq(0x00640000, sxy[2]);
+    zexpect_s32_eq(0x00640064, sxy[3]);
+    zexpect_s32_eq(926, p);
+    zexpect_s32_eq(4000, otz);
+    zexpect_s32_eq(0, flag);
+}
+
+ZTEST(gte, initgeom_dqb) {
+    int dqb;
+    InitGeom();
+    GTE_READ_DQB(dqb);
+    zexpect_s32_eq(0x1400000, dqb);
 }
 
 ZTEST(gte, rtps_identity_center) {
