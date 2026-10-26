@@ -377,8 +377,14 @@ static int psyz_clr(RECT* rect, u32 color) {
     setlen(&clear_cmd, 4);
     clear_cmd.code[0] = 0xE6000000; // mask bit setting
     clear_cmd.code[1] = (color & 0xFFFFFF) | 0x02000000;
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    // the u32 pun reads y,x on BE; pack the PS1 word (x low)
+    clear_cmd.code[2] = (u32)(u16)rect->y << 16 | (u16)rect->x;
+    clear_cmd.code[3] = (u32)(u16)rect->h << 16 | (u16)rect->w;
+#else
     clear_cmd.code[2] = (u_long) * (u32*)&rect->x;
     clear_cmd.code[3] = (u_long) * (u32*)&rect->w;
+#endif
 #else
     // Needs a sync so 0xE1 CMDs can update GPU_STATUS before it gets used.
     Psyz_GpuExeque();
@@ -386,8 +392,13 @@ static int psyz_clr(RECT* rect, u32 color) {
     clear_cmd.code[0] = 0xE6000000; // mask bit setting
     clear_cmd.code[1] = 0xE1000000 | GPU_STATUS & 0x7FF | (color >> 0x1F) << 10;
     clear_cmd.code[2] = (color & 0xFFFFFF) | 0x02000000;
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    clear_cmd.code[3] = (u32)(u16)rect->y << 16 | (u16)rect->x;
+    clear_cmd.code[4] = (u32)(u16)rect->h << 16 | (u16)rect->w;
+#else
     clear_cmd.code[3] = (u_long) * (u32*)&rect->x;
     clear_cmd.code[4] = (u_long) * (u32*)&rect->w;
+#endif
 #endif
 
     termPrim(&clear_cmd);
