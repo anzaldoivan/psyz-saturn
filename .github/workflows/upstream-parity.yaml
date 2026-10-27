@@ -2,9 +2,6 @@
 name: Upstream workflow parity
 on:
   pull_request:
-    paths:
-      - '.github/workflows/**'
-      - 'tools/ci/check_upstream_workflows.py'
   schedule:
     - cron: '23 9 * * 1'
   workflow_dispatch:
