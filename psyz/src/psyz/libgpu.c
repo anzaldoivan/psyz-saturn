@@ -202,14 +202,72 @@ static void GPU_SyncIfPending(void) {
     }
 }
 
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+/*
+ * Big-endian hosts (Saturn SH-2): primitive structs are laid out field by
+ * field for the PS1, so a 32-bit load of payload word i returns its bytes in
+ * the wrong order. Rebuild the value a PS1 load returns, by word kind from the
+ * GP0 command format (code has bits 0-1 cleared):
+ *   colour/code (4 u_char): reverse the bytes
+ *   vertex, w/h, polyline terminator (2 short): swap the halves
+ *   uv + clut/tpage/pad (2 u_char + u_short): swap halves, swap low bytes
+ */
+static u32 PsyzBeGp0Word(int code, int i, u32 w) {
+    int colour = i == 0;
+    int uv = 0;
+    int j;
+
+    if (i > 0 && code < 0x40) {
+        /* polygon: vertex 0 = xy[,uv]; later vertices = [rgb] xy [uv] */
+        int tex = (code & 0x04) != 0;
+        int per = 1 + ((code & 0x10) != 0) + tex;
+
+        j = i - 1;
+        if (j >= 1 + tex) {
+            j = (j - 1 - tex) % per;
+            if (code & 0x10) {
+                colour = j == 0;
+                j--;
+            }
+        }
+        uv = j == 1;
+    } else if (i > 0 && code < 0x60) {
+        /* line: gouraud = xy, then rgb,xy,...; flat = all xy */
+        colour = (code & 0x10) && i >= 2 && i % 2 == 0;
+    } else if (i > 0) {
+        /* rect: xy, [uv if textured], [w/h if variable size] */
+        uv = i == 2 && (code & 0x04);
+    }
+    if (colour)
+        return w >> 24 | (w >> 8 & 0xFF00u) | (w << 8 & 0xFF0000u) | w << 24;
+    w = w >> 16 | w << 16;
+    if (uv)
+        w = (w & 0xFFFF0000u) | (w >> 8 & 0xFFu) | (w << 8 & 0xFF00u);
+    return w;
+}
+#endif
+
 static void GPU_Enqueue(u_long* packets) {
     DR_ENV* env = (DR_ENV*)packets;
     gpu_busy = 1;
     if (sizeof(u_long) == 4) {
         // fast path for 32-bit systems
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+        static u_long be_words[0x100];
+#endif
         while (1) {
             if (env->len > 0) {
-                DispatchPackets((u_long*)env->code, (int)env->len);
+                u_long* words = (u_long*)env->code;
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+                int code = getcode(env) & ~3;
+                if (env->len <= LEN(be_words) && code >= 0x20 && code < 0x80) {
+                    const u32* packed = (const u32*)env->code;
+                    for (int i = 0; i < (int)env->len; i++)
+                        be_words[i] = PsyzBeGp0Word(code, i, packed[i]);
+                    words = be_words;
+                }
+#endif
+                DispatchPackets(words, (int)env->len);
             }
             if (isendprim(env)) {
                 break;
@@ -240,7 +298,12 @@ static void GPU_Enqueue(u_long* packets) {
                 // it is a prim, we need to split
                 u32* prim_data = (u32*)env->code;
                 for (u_long i = 0; i < env->len; i++) {
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+                    queue_buf[queue_len + i] =
+                        PsyzBeGp0Word(code, (int)i, prim_data[i]);
+#else
                     queue_buf[queue_len + i] = prim_data[i];
+#endif
                 }
             } else if (env->len > 0) {
                 // TODO this is a temporary solution:
@@ -314,8 +377,14 @@ static int psyz_clr(RECT* rect, u32 color) {
     setlen(&clear_cmd, 4);
     clear_cmd.code[0] = 0xE6000000; // mask bit setting
     clear_cmd.code[1] = (color & 0xFFFFFF) | 0x02000000;
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    // the u32 pun reads y,x on BE; pack the PS1 word (x low)
+    clear_cmd.code[2] = (u32)(u16)rect->y << 16 | (u16)rect->x;
+    clear_cmd.code[3] = (u32)(u16)rect->h << 16 | (u16)rect->w;
+#else
     clear_cmd.code[2] = (u_long) * (u32*)&rect->x;
     clear_cmd.code[3] = (u_long) * (u32*)&rect->w;
+#endif
 #else
     // Needs a sync so 0xE1 CMDs can update GPU_STATUS before it gets used.
     Psyz_GpuExeque();
@@ -323,8 +392,13 @@ static int psyz_clr(RECT* rect, u32 color) {
     clear_cmd.code[0] = 0xE6000000; // mask bit setting
     clear_cmd.code[1] = 0xE1000000 | GPU_STATUS & 0x7FF | (color >> 0x1F) << 10;
     clear_cmd.code[2] = (color & 0xFFFFFF) | 0x02000000;
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    clear_cmd.code[3] = (u32)(u16)rect->y << 16 | (u16)rect->x;
+    clear_cmd.code[4] = (u32)(u16)rect->h << 16 | (u16)rect->w;
+#else
     clear_cmd.code[3] = (u_long) * (u32*)&rect->x;
     clear_cmd.code[4] = (u_long) * (u32*)&rect->w;
+#endif
 #endif
 
     termPrim(&clear_cmd);
