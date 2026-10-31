@@ -1754,7 +1754,7 @@ ZTEST(gte, dpcs_moves_color_toward_far_color) {
     zexpect_u32_eq(RGBCD(120, 90, 85, 0x2C), out);
 }
 
-static void GeomRtps(SVECTOR* v, int* sxy) {
+static void GeomRtps(SVECTOR* v, DVECTOR* sxy) {
     MATRIX m = {{{0x1000, 0, 0}, {0, 0x1000, 0}, {0, 0, 0x1000}}, {0, 0, 1000}};
     gte_SetRotMatrix(&m);
     gte_SetTransMatrix(&m);
@@ -1765,20 +1765,22 @@ static void GeomRtps(SVECTOR* v, int* sxy) {
 
 ZTEST(gte, setgeomoffset_and_screen_project) {
     SVECTOR v = {100, 50, 0};
-    int sxy = 0;
+    DVECTOR sxy = {0, 0};
     gte_SetGeomOffset(160, 120);
     gte_SetGeomScreen(500);
     GeomRtps(&v, &sxy);
-    zexpect_u32_eq(SXY(210, 145), sxy);
+    zexpect_s32_eq(210, sxy.vx);
+    zexpect_s32_eq(145, sxy.vy);
 }
 
 ZTEST(gte, setgeomoffset_accepts_negative_offset) {
     SVECTOR v = {100, 50, 0};
-    int sxy = 0;
+    DVECTOR sxy = {0, 0};
     gte_SetGeomOffset(-31, -63);
     gte_SetGeomScreen(1000);
     GeomRtps(&v, &sxy);
-    zexpect_u32_eq(SXY(69, -13), sxy);
+    zexpect_s32_eq(69, sxy.vx);
+    zexpect_s32_eq(-13, sxy.vy);
 }
 
 typedef struct {
