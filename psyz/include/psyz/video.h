@@ -312,6 +312,16 @@ unsigned char* Psyz_VideoAllocCapturedFrame(int* w, int* h);
  */
 unsigned char* Psyz_VideoAllocVramDump(int* w, int* h);
 
+/* Capture all 1024x512 PS1 VRAM pixels as little-endian RGB5551 words.
+ * Diagnostic only; caller owns the returned buffer. */
+unsigned short* Psyz_VideoAllocCapturedVram(int* w, int* h);
+
+/* Diagnostic entry point: execute an already canonicalized GP0 FIFO stream.
+ * This bypasses OT pointer parsing but uses the normal platform renderer. */
+int Psyz_GpuReplayBegin(void);
+int Psyz_GpuReplayPacket(const unsigned int* words, int count);
+int Psyz_GpuReplayEnd(void);
+
 #ifdef __cplusplus
 }
 #endif
