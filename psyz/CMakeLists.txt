@@ -12,7 +12,7 @@ include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/module.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/ios.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/web.cmake)
 
-if(NOT PSP)
+if(NOT PSP AND NOT SATURN)
     set(SDL_SHARED OFF CACHE BOOL "" FORCE)
     set(SDL_STATIC ON CACHE BOOL "" FORCE)
     set(SDL_TEST OFF CACHE BOOL "" FORCE)
@@ -309,6 +309,120 @@ elseif(PSP)
         list(APPEND PSYZ_LIBS pspprof)
         set(PSYZ_PSP_PROFILE_CFLAGS -pg)
     endif()
+elseif(SATURN)
+    # libyaul on the Saturn SH-2s; no SDL. The set is the flat-scene closure
+    # and must equal PSYZ_SATURN_SRCS in src/saturn/saturn.mk, which is the
+    # build that is exercised (see src/saturn/saturn.mk).
+    set(PSYZ_SOURCES
+        ../decomp/src/libgpu/ext.c
+        ../decomp/src/libgpu/prim.c
+        ../decomp/src/libgpu/sys.c
+        ../decomp/src/libsnd/cres.c
+        ../decomp/src/libsnd/decres.c
+        ../decomp/src/libsnd/pause.c
+        ../decomp/src/libsnd/play.c
+        ../decomp/src/libsnd/playmode.c
+        ../decomp/src/libsnd/replay.c
+        ../decomp/src/libsnd/sscall.c
+        ../decomp/src/libsnd/ssclose.c
+        ../decomp/src/libsnd/sscres.c
+        ../decomp/src/libsnd/ssend.c
+        ../decomp/src/libsnd/ssinit.c
+        ../decomp/src/libsnd/ssinit_c.c
+        ../decomp/src/libsnd/ssinit_h.c
+        ../decomp/src/libsnd/ssloop.c
+        ../decomp/src/libsnd/ssopenp.c
+        ../decomp/src/libsnd/ssplay.c
+        ../decomp/src/libsnd/ssquit.c
+        ../decomp/src/libsnd/sssattr.c
+        ../decomp/src/libsnd/sssmv.c
+        ../decomp/src/libsnd/ssstart.c
+        ../decomp/src/libsnd/ssstop.c
+        ../decomp/src/libsnd/sssv.c
+        ../decomp/src/libsnd/sstable.c
+        ../decomp/src/libsnd/sstick.c
+        ../decomp/src/libsnd/sstickcb.c
+        ../decomp/src/libsnd/ssvol.c
+        ../decomp/src/libsnd/ut_ako.c
+        ../decomp/src/libsnd/ut_autop.c
+        ../decomp/src/libsnd/ut_cadsr.c
+        ../decomp/src/libsnd/ut_key.c
+        ../decomp/src/libsnd/ut_keyv.c
+        ../decomp/src/libsnd/ut_rdel.c
+        ../decomp/src/libsnd/ut_rdep.c
+        ../decomp/src/libsnd/ut_rev.c
+        ../decomp/src/libsnd/ut_roff.c
+        ../decomp/src/libsnd/ut_ron.c
+        ../decomp/src/libsnd/ut_vvol.c
+        ../decomp/src/libsnd/vm_aloc2.c
+        ../decomp/src/libsnd/vm_autop.c
+        ../decomp/src/libsnd/vm_doff.c
+        ../decomp/src/libsnd/vm_f.c
+        ../decomp/src/libsnd/vm_g.c
+        ../decomp/src/libsnd/vm_init.c
+        ../decomp/src/libsnd/vm_n2p.c
+        ../decomp/src/libsnd/vm_noff.c
+        ../decomp/src/libsnd/vm_nowof.c
+        ../decomp/src/libsnd/vm_nowon.c
+        ../decomp/src/libsnd/vm_vsu.c
+        ../decomp/src/libsnd/vol.c
+        ../decomp/src/libsnd/vs_mono.c
+        ../decomp/src/libsnd/vs_srv.c
+        ../decomp/src/libsnd/vs_vab.c
+        ../decomp/src/libsnd/vs_vh.c
+        ../decomp/src/libsnd/vs_vtb.c
+        ../decomp/src/libsnd/vs_vtbp.c
+        ../decomp/src/libsnd/vs_vtc.c
+        ../decomp/src/libspu/s_cb.c
+        ../decomp/src/libspu/s_crwa.c
+        ../decomp/src/libspu/s_dcb.c
+        ../decomp/src/libspu/s_gtm.c
+        ../decomp/src/libspu/s_gva.c
+        ../decomp/src/libspu/s_i.c
+        ../decomp/src/libspu/s_ih.c
+        ../decomp/src/libspu/s_ini.c
+        ../decomp/src/libspu/s_it.c
+        ../decomp/src/libspu/s_itc.c
+        ../decomp/src/libspu/s_m.c
+        ../decomp/src/libspu/s_m_f.c
+        ../decomp/src/libspu/s_m_init.c
+        ../decomp/src/libspu/s_m_int.c
+        ../decomp/src/libspu/s_m_m.c
+        ../decomp/src/libspu/s_m_util.c
+        ../decomp/src/libspu/s_m_wsa.c
+        ../decomp/src/libspu/s_q.c
+        ../decomp/src/libspu/s_r.c
+        ../decomp/src/libspu/s_rmp.c
+        ../decomp/src/libspu/s_sca.c
+        ../decomp/src/libspu/s_sic.c
+        ../decomp/src/libspu/s_sk.c
+        ../decomp/src/libspu/s_snv.c
+        ../decomp/src/libspu/s_sr.c
+        ../decomp/src/libspu/s_stm.c
+        ../decomp/src/libspu/s_stsa.c
+        ../decomp/src/libspu/s_w.c
+        ../decomp/src/libspu/s_wp.c
+        ../decomp/src/libspu/spu.c
+        ../decomp/src/libspu/sr_gaks.c
+        src/psyz/libapi.c
+        src/psyz/libetc.c
+        src/psyz/libgpu.c
+        src/psyz/libgte.c
+        src/psyz/libgte_sw_sqrt.c
+        src/psyz/libsn.c
+        src/psyz/libsnd.c
+        src/psyz/libspu.c
+        src/saturn/saturn_cd.c
+        src/saturn/saturn_cdhw.c
+        src/saturn/saturn_gpu.c
+        src/saturn/saturn_libcd.c
+        src/saturn/saturn_misc.c
+        src/saturn/saturn_movie.c
+        src/saturn/saturn_movie_decoder.c
+        src/saturn/saturn_pad.c
+        src/saturn/saturn_save.c
+        src/saturn/saturn_spu.c
+    )
 else()
     list(APPEND PSYZ_SOURCES src/platform/plat_unix.c)
     list(APPEND PSYZ_SOURCES src/platform/sdl3_log.c)
@@ -326,7 +440,7 @@ else()
     endif()
 endif()
 
-if(NOT PSP AND NOT EMSCRIPTEN AND PSYZ_RENDERER STREQUAL "sdl3_gpu")
+if(NOT PSP AND NOT SATURN AND NOT EMSCRIPTEN AND PSYZ_RENDERER STREQUAL "sdl3_gpu")
     list(APPEND PSYZ_SOURCES src/platform/sdl3_software.c)
 endif()
 
@@ -341,7 +455,7 @@ if(PSYZ_IS_IOS)
 endif()
 target_include_directories(psyz PUBLIC ${PSYZ_INC})
 set_property(TARGET psyz PROPERTY PSYZ_EXPORT_TO_MODULES 1)
-if(PSP)
+if(PSP OR SATURN)
     target_link_libraries(psyz PUBLIC ${PSYZ_LIBS})
 else()
     target_link_libraries(psyz PUBLIC SDL3::SDL3 ${PSYZ_LIBS})
