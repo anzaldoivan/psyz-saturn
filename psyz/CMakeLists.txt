@@ -376,6 +376,7 @@ elseif(SATURN)
         ../decomp/src/libspu/s_cb.c
         ../decomp/src/libspu/s_crwa.c
         ../decomp/src/libspu/s_dcb.c
+        ../decomp/src/libspu/s_gks.c
         ../decomp/src/libspu/s_gtm.c
         ../decomp/src/libspu/s_gva.c
         ../decomp/src/libspu/s_i.c
@@ -390,20 +391,26 @@ elseif(SATURN)
         ../decomp/src/libspu/s_m_m.c
         ../decomp/src/libspu/s_m_util.c
         ../decomp/src/libspu/s_m_wsa.c
+        ../decomp/src/libspu/s_n2p.c
         ../decomp/src/libspu/s_q.c
         ../decomp/src/libspu/s_r.c
         ../decomp/src/libspu/s_rmp.c
+        ../decomp/src/libspu/s_sav.c
         ../decomp/src/libspu/s_sca.c
         ../decomp/src/libspu/s_sic.c
         ../decomp/src/libspu/s_sk.c
         ../decomp/src/libspu/s_snv.c
         ../decomp/src/libspu/s_sr.c
+        ../decomp/src/libspu/s_sra.c
+        ../decomp/src/libspu/s_srmp.c
         ../decomp/src/libspu/s_stm.c
         ../decomp/src/libspu/s_stsa.c
+        ../decomp/src/libspu/s_sva.c
         ../decomp/src/libspu/s_w.c
         ../decomp/src/libspu/s_wp.c
         ../decomp/src/libspu/spu.c
         ../decomp/src/libspu/sr_gaks.c
+        ../decomp/src/libspu/sr_sv.c
         src/psyz/libapi.c
         src/psyz/libetc.c
         src/psyz/libgpu.c

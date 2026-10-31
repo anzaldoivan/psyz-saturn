@@ -70,6 +70,7 @@ PSYZ_SATURN_SRCS := \
     $(PSYZ_ROOT)/decomp/src/libspu/s_cb.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_crwa.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_dcb.c \
+    $(PSYZ_ROOT)/decomp/src/libspu/s_gks.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_gtm.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_gva.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_i.c \
@@ -84,20 +85,26 @@ PSYZ_SATURN_SRCS := \
     $(PSYZ_ROOT)/decomp/src/libspu/s_m_m.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_m_util.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_m_wsa.c \
+    $(PSYZ_ROOT)/decomp/src/libspu/s_n2p.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_q.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_r.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_rmp.c \
+    $(PSYZ_ROOT)/decomp/src/libspu/s_sav.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_sca.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_sic.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_sk.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_snv.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_sr.c \
+    $(PSYZ_ROOT)/decomp/src/libspu/s_sra.c \
+    $(PSYZ_ROOT)/decomp/src/libspu/s_srmp.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_stm.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_stsa.c \
+    $(PSYZ_ROOT)/decomp/src/libspu/s_sva.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_w.c \
     $(PSYZ_ROOT)/decomp/src/libspu/s_wp.c \
     $(PSYZ_ROOT)/decomp/src/libspu/spu.c \
     $(PSYZ_ROOT)/decomp/src/libspu/sr_gaks.c \
+    $(PSYZ_ROOT)/decomp/src/libspu/sr_sv.c \
     $(PSYZ_ROOT)/psyz/src/psyz/libapi.c \
     $(PSYZ_ROOT)/psyz/src/psyz/libetc.c \
     $(PSYZ_ROOT)/psyz/src/psyz/libgpu.c \
