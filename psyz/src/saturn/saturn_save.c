@@ -278,8 +278,8 @@ int close(int fd) {
     return fd;
 }
 
-long lseek(long fd, long offset, long flag) {
-    long t;
+unsigned long lseek(int fd, unsigned int off, int flag) {
+    long offset = (int)off, t;
     retry_resenab();
     if (bad_fd(fd, 0) || (flag != SEEK_SET && flag != SEEK_CUR))
         return fail(SATURN_SAVE_E_ARG);
@@ -301,7 +301,7 @@ long read(long fd, void* buf, long n) {
     return n;
 }
 
-long write(long fd, void* buf, long n) {
+int write(int fd, char* buf, int n) {
     retry_resenab();
     if (bad_fd(fd, FWRITE) || n < 0 || n > (long)(f.size - f.pos))
         return fail(SATURN_SAVE_E_ARG);

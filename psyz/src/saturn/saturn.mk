@@ -111,6 +111,7 @@ PSYZ_SATURN_SRCS := \
     $(PSYZ_ROOT)/decomp/src/libspu/spu.c \
     $(PSYZ_ROOT)/decomp/src/libspu/sr_gaks.c \
     $(PSYZ_ROOT)/decomp/src/libspu/sr_sv.c \
+    $(PSYZ_ROOT)/psyz/src/psyz/kernel.c \
     $(PSYZ_ROOT)/psyz/src/psyz/libapi.c \
     $(PSYZ_ROOT)/psyz/src/psyz/libetc.c \
     $(PSYZ_ROOT)/psyz/src/psyz/libgpu.c \
@@ -121,9 +122,11 @@ PSYZ_SATURN_SRCS := \
     $(PSYZ_ROOT)/psyz/src/psyz/libspu.c \
     $(PSYZ_ROOT)/psyz/src/saturn/saturn_cd.c \
     $(PSYZ_ROOT)/psyz/src/saturn/saturn_cdhw.c \
+    $(PSYZ_ROOT)/psyz/src/saturn/saturn_dma.c \
     $(PSYZ_ROOT)/psyz/src/saturn/saturn_gpu.c \
     $(PSYZ_ROOT)/psyz/src/saturn/saturn_libcd.c \
     $(PSYZ_ROOT)/psyz/src/saturn/saturn_misc.c \
+    $(PSYZ_ROOT)/psyz/src/saturn/saturn_os.c \
     $(PSYZ_ROOT)/psyz/src/saturn/saturn_pad.c \
     $(PSYZ_ROOT)/psyz/src/saturn/saturn_save.c \
     $(PSYZ_ROOT)/psyz/src/saturn/saturn_spu.c

@@ -417,6 +417,7 @@ elseif(SATURN)
         ../decomp/src/libspu/spu.c
         ../decomp/src/libspu/sr_gaks.c
         ../decomp/src/libspu/sr_sv.c
+        src/psyz/kernel.c
         src/psyz/libapi.c
         src/psyz/libetc.c
         src/psyz/libgpu.c
@@ -427,11 +428,13 @@ elseif(SATURN)
         src/psyz/libspu.c
         src/saturn/saturn_cd.c
         src/saturn/saturn_cdhw.c
+        src/saturn/saturn_dma.c
         src/saturn/saturn_gpu.c
         src/saturn/saturn_libcd.c
         src/saturn/saturn_misc.c
         src/saturn/saturn_movie.c
         src/saturn/saturn_movie_decoder.c
+        src/saturn/saturn_os.c
         src/saturn/saturn_pad.c
         src/saturn/saturn_save.c
         src/saturn/saturn_spu.c
