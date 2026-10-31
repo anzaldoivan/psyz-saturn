@@ -67,6 +67,7 @@
 /* SPU_RXX offsets (decomp libspu_private.h:84-147) */
 #define R_MAIN_L 0x180u
 #define R_MAIN_R 0x182u
+#define R_CD_VOL 0x1B0u
 #define R_KEY_ON 0x188u
 #define R_KEY_OFF 0x18Cu
 #define R_TRANS_ADDR 0x1A6u
@@ -521,7 +522,8 @@ void saturn_spu_pump(void) {
 }
 
 /* movie stream on entry NV: forward loop over the ring, PCM8, centre pan,
- * the title's main volume (SPU 0x180/0x182 = VREG(NV, 0/2)); permit 1 at
+ * the CD volume (SPU 0x1B0/0x1B2, PS1 scales CD input before main volume;
+ * main volume reaches the stream once, through MVOL); permit 1 at
  * the first write, 0 at end (the driver frees the slot at permit 0); a
  * first write while that 0 is pending restarts the slot (stop form) */
 int saturn_spu_movie_begin(uint32_t rate) {
@@ -541,7 +543,7 @@ int saturn_spu_movie_begin(uint32_t rate) {
     en->playsize = (uint16_t)MOVIE_LEN;
     en->pitch = pitch_word(p);
     en->pan = 0;
-    en->volume = volume(NV, 0);
+    en->volume = volume(R_CD_VOL >> 4, 0);
     en->bpb = bpb(p);
     s.vs[NV].loop = 1;
     s.dirty |= 1u << NV;
