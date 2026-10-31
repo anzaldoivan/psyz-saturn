@@ -13,10 +13,13 @@ PSYZ_SATURN_SRCS := \
     $(PSYZ_ROOT)/decomp/src/libgpu/sys.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/cres.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/decres.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/miditime.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/pause.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/play.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/playmode.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/replay.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/sepinit.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/seqinit.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/sscall.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ssclose.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/sscres.c \
@@ -26,6 +29,7 @@ PSYZ_SATURN_SRCS := \
     $(PSYZ_ROOT)/decomp/src/libsnd/ssinit_h.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ssloop.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ssopenp.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/ssopenq.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ssplay.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ssquit.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/sssattr.c \
@@ -48,6 +52,7 @@ PSYZ_SATURN_SRCS := \
     $(PSYZ_ROOT)/decomp/src/libsnd/ut_roff.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ut_ron.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ut_vvol.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/vm_aloc1.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_aloc2.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_autop.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_doff.c \
@@ -58,6 +63,7 @@ PSYZ_SATURN_SRCS := \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_noff.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_nowof.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_nowon.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/vm_seq.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_vsu.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vol.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vs_mono.c \
