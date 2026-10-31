@@ -278,14 +278,30 @@ int MoveImage(RECT* rect, int x, int y) {
 #define MOVE_IMAGE_DATA_INDEX 3
     u_long move_image[6] = {0, 0, 0, 0, 0, 0};
     setlen(move_image, 4);
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    // setcode writes byte 11, the LSB of move_image[2] on BE
+    move_image[2] = 0x80000000;
+#else
     setcode(move_image, 0x80);
+#endif
     termPrim(move_image);
 #else
 #define MOVE_IMAGE_DATA_INDEX 2
 #endif
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    // the u32 pun reads y,x on BE; pack the PS1 word (x low)
+    move_image[MOVE_IMAGE_DATA_INDEX + 0] =
+        (u32)(u16)rect->y << 16 | (u16)rect->x;
+#else
     move_image[MOVE_IMAGE_DATA_INDEX + 0] = *(int*)&rect->x;
+#endif
     move_image[MOVE_IMAGE_DATA_INDEX + 1] = y << 0x10 | (u16)x;
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+    move_image[MOVE_IMAGE_DATA_INDEX + 2] =
+        (u32)(u16)rect->h << 16 | (u16)rect->w;
+#else
     move_image[MOVE_IMAGE_DATA_INDEX + 2] = *(int*)&rect->w;
+#endif
 #undef MOVE_IMAGE_DATA_INDEX
     return D_800B8920->addque2((int (*)(u_long, u_long))D_800B8920->cwc,
                                (u_long)move_image, sizeof(move_image), 0);
@@ -529,8 +545,13 @@ void SetDrawEnv(DR_ENV* dr_env, DRAWENV* env) {
         rect.x -= env->ofs[0];
         rect.y -= env->ofs[1];
         PUSH_CODE = 0x60000000 | (env->b0 << 16) | (env->g0 << 8) | env->r0;
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+        PUSH_CODE = (u32)(u16)rect.y << 16 | (u16)rect.x;
+        PUSH_CODE = (u32)(u16)rect.h << 16 | (u16)rect.w;
+#else
         PUSH_CODE = *(u32*)&rect.x;
         PUSH_CODE = *(u32*)&rect.w;
+#endif
         rect.x += env->ofs[0];
         rect.y += env->ofs[1];
     }
@@ -587,14 +608,24 @@ void SetDrawEnv2(DR_ENV* dr_env, DRAWENV* env) {
             rect.x -= env->ofs[0];
             rect.y -= env->ofs[1];
             PUSH_CODE = 0x60000000 | (env->b0 << 16) | (env->g0 << 8) | env->r0;
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+            PUSH_CODE = (u32)(u16)rect.y << 16 | (u16)rect.x;
+            PUSH_CODE = (u32)(u16)rect.h << 16 | (u16)rect.w;
+#else
             PUSH_CODE = *(u32*)&rect.x;
             PUSH_CODE = *(u32*)&rect.w;
+#endif
             rect.x += env->ofs[0];
             rect.y += env->ofs[1];
         } else {
             PUSH_CODE = 0x02000000 | (env->b0 << 16) | (env->g0 << 8) | env->r0;
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+            PUSH_CODE = (u32)(u16)rect.y << 16 | (u16)rect.x;
+            PUSH_CODE = (u32)(u16)rect.h << 16 | (u16)rect.w;
+#else
             PUSH_CODE = *(u32*)&rect.x;
             PUSH_CODE = *(u32*)&rect.w;
+#endif
         }
     }
     setlen(dr, len - 1);
