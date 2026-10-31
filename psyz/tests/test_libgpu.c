@@ -357,6 +357,46 @@ ZTEST(gpu, gouraud_line_after_flush) {
     free(d);
 }
 
+static void ExpectReplayedQuad(void) {
+    int w, h;
+    unsigned char* d;
+    const unsigned char* p;
+
+    DrawSync(0);
+    VSync(0);
+    PutDispEnv(&cdb->disp);
+    d = Psyz_VideoAllocCapturedFrame(&w, &h);
+    zassert_ptr_ne(NULL, d);
+    p = d + 3 * (16 * w + 16);
+    zexpect_s32_gt(200, p[0]);
+    zexpect_s32_lt(16, p[1]);
+    zexpect_s32_lt(16, p[2]);
+    free(d);
+}
+
+ZTEST(gpu, replay_canonical_gp0_words) {
+    const unsigned int words[] = {
+        0xE3000000, 0xE403BCFF, 0xE5000000, 0x280000F8,
+        0x00100010, 0x00100020, 0x00200010, 0x00200020,
+    };
+    zassert_s32_eq(0, Psyz_GpuReplayBegin());
+    zassert_s32_eq(0, Psyz_GpuReplayPacket(words, LEN(words)));
+    zassert_s32_eq(0, Psyz_GpuReplayEnd());
+    ExpectReplayedQuad();
+}
+
+ZTEST(gpu, replay_expands_32_bit_words_on_64_bit_hosts) {
+    const unsigned int state[] = {0xE3000000, 0xE403BCFF, 0xE5000000};
+    const unsigned int quad[] = {
+        0x280000F8, 0x00100010, 0x00100020, 0x00200010, 0x00200020,
+    };
+    zassert_s32_eq(0, Psyz_GpuReplayBegin());
+    zassert_s32_eq(0, Psyz_GpuReplayPacket(state, LEN(state)));
+    zassert_s32_eq(0, Psyz_GpuReplayPacket(quad, LEN(quad)));
+    zassert_s32_eq(0, Psyz_GpuReplayEnd());
+    ExpectReplayedQuad();
+}
+
 ZTEST(gpu, draw_lines) {
     zskip_targets("pcsx-redux"); // differs from real hardware
     zskip_targets("ppsspp");
