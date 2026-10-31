@@ -285,6 +285,7 @@ int MoveImage(RECT* rect, int x, int y) {
     setcode(move_image, 0x80);
 #endif
     termPrim(move_image);
+    setRawMark(move_image);
 #else
 #define MOVE_IMAGE_DATA_INDEX 2
 #endif
@@ -295,7 +296,7 @@ int MoveImage(RECT* rect, int x, int y) {
 #else
     move_image[MOVE_IMAGE_DATA_INDEX + 0] = *(int*)&rect->x;
 #endif
-    move_image[MOVE_IMAGE_DATA_INDEX + 1] = y << 0x10 | (u16)x;
+    move_image[MOVE_IMAGE_DATA_INDEX + 1] = (u32)(u16)y << 16 | (u16)x;
 #if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
     move_image[MOVE_IMAGE_DATA_INDEX + 2] =
         (u32)(u16)rect->h << 16 | (u16)rect->w;
@@ -467,18 +468,21 @@ void SetTexWindow(DR_TWIN* p, RECT* tw) {
     setlen(p, 2);
     p->code[0] = get_tw(tw);
     p->code[1] = 0;
+    setRawMark(p);
 }
 
 void SetDrawArea(DR_AREA* p, RECT* r) {
     setlen(p, 2);
     p->code[0] = get_cs(r->x, r->y);
     p->code[1] = get_ce(r->x + r->w - 1, r->y + r->h - 1);
+    setRawMark(p);
 }
 
 void SetDrawOffset(DR_OFFSET* p, u_short* ofs) {
     setlen(p, 2);
     p->code[0] = get_ofs(ofs[0], ofs[1]);
     p->code[1] = 0;
+    setRawMark(p);
 }
 
 typedef struct {
@@ -494,12 +498,14 @@ void SetPriority(DR_PRIO* p, int pbc, int pbw) {
     }
     p->code[0] = data | (pbw != 0);
     p->code[1] = 0;
+    setRawMark(p);
 }
 
 void SetDrawMode(DR_MODE* p, int dfe, int dtd, int tpage, RECT* tw) {
     setlen(p, 2);
     p->code[0] = get_mode(dfe, dtd, tpage);
     p->code[1] = get_tw(tw);
+    setRawMark(p);
 }
 
 void SetDrawEnv(DR_ENV* dr_env, DRAWENV* env) {
@@ -556,6 +562,7 @@ void SetDrawEnv(DR_ENV* dr_env, DRAWENV* env) {
         rect.y += env->ofs[1];
     }
     setlen(dr, len - 1);
+    setRawMark(dr);
 #undef PUSH_CODE
 }
 
@@ -629,6 +636,7 @@ void SetDrawEnv2(DR_ENV* dr_env, DRAWENV* env) {
         }
     }
     setlen(dr, len - 1);
+    setRawMark(dr);
 #undef PUSH_CODE
 }
 

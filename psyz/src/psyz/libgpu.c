@@ -245,6 +245,9 @@ static u32 PsyzBeGp0Word(int code, int i, u32 w) {
         w = (w & 0xFFFF0000u) | (w >> 8 & 0xFFu) | (w << 8 & 0xFF00u);
     return w;
 }
+#define RAW_MARK 0x100 // setRawMark
+#else
+#define RAW_MARK 0
 #endif
 
 static void GPU_Enqueue(u_long* packets) {
@@ -256,18 +259,21 @@ static void GPU_Enqueue(u_long* packets) {
         static u_long be_words[0x100];
 #endif
         while (1) {
-            if (env->len > 0) {
+            if ((env->len & ~(u_long)RAW_MARK) > 0xFF) {
+                ERRORF("packet 0x%X long, likely corrupted", (u32)env->len);
+            } else if (env->len > 0) {
                 u_long* words = (u_long*)env->code;
 #if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
                 int code = getcode(env) & ~3;
-                if (env->len <= LEN(be_words) && code >= 0x20 && code < 0x80) {
+                if (!(env->len & 0x100) && code >= 0x20 && code < 0x80) {
                     const u32* packed = (const u32*)env->code;
-                    for (int i = 0; i < (int)env->len; i++)
+                    for (int i = 0; i < (int)(env->len & 0xFF); i++)
                         be_words[i] = PsyzBeGp0Word(code, i, packed[i]);
                     words = be_words;
                 }
 #endif
-                DispatchPackets(words, (int)env->len);
+                DispatchPackets(
+                    words, (int)(env->len & 0xFF)); // BE: bit 8 = raw mark
             }
             if (isendprim(env)) {
                 break;
@@ -280,24 +286,30 @@ static void GPU_Enqueue(u_long* packets) {
         return;
     }
     while (1) {
-        if (queue_len + env->len > LEN(queue_buf)) {
-            if (env->len > 0x100) {
-                ERRORF("packet 0x%X long, likely corrupted", env->len);
+        u_long len = env->len & ~(u_long)RAW_MARK;
+        if (queue_len + len > LEN(queue_buf)) {
+            if (len > 0x100) {
+                ERRORF("packet 0x%X long, likely corrupted", (u32)len);
             }
             INFOF("GPU queue full, flushing");
             GPU_Flush();
+            if (len > LEN(queue_buf)) {
+                ERRORF("packet 0x%X exceeds the GPU queue, skipped", (u32)len);
+                len = 0;
+            }
         }
         // a flush empties the queue; the packet that did not fit still goes in
+        // unless it is longer than the whole queue
         if (sizeof(u_long) == 8) {
             // Wow okay, this part is uuuugly...
             // Gpu code is usually written to a u_long array, which will work
             // fine on both 32-bit and 64-bit compiled code.
             // But primitives are mapped from structs, we need to align the data
             int code = getcode(env) & ~3;
-            if (code >= 0x20 && code < 0x80) {
+            if (!(env->len & RAW_MARK) && code >= 0x20 && code < 0x80) {
                 // it is a prim, we need to split
                 u32* prim_data = (u32*)env->code;
-                for (u_long i = 0; i < env->len; i++) {
+                for (u_long i = 0; i < len; i++) {
 #if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
                     queue_buf[queue_len + i] =
                         PsyzBeGp0Word(code, (int)i, prim_data[i]);
@@ -305,15 +317,14 @@ static void GPU_Enqueue(u_long* packets) {
                     queue_buf[queue_len + i] = prim_data[i];
 #endif
                 }
-            } else if (env->len > 0) {
+            } else if (len > 0) {
                 // TODO this is a temporary solution:
                 // if gpu commands get merged with primitives, this will not
                 // work
-                memcpy(queue_buf + queue_len, env->code,
-                       env->len * sizeof(u_long));
+                memcpy(queue_buf + queue_len, env->code, len * sizeof(u_long));
             }
         }
-        queue_len += (int)env->len;
+        queue_len += (int)len;
         if (isendprim(env)) {
             break;
         }
@@ -402,6 +413,7 @@ static int psyz_clr(RECT* rect, u32 color) {
 #endif
 
     termPrim(&clear_cmd);
+    setRawMark(&clear_cmd);
     GPU_Enqueue((u_long*)&clear_cmd);
     return 0;
 }
