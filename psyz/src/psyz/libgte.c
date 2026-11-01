@@ -1194,7 +1194,7 @@ void InitGeom() {
     ZSF4 = 0x100;
     H = 1000;
     DQA = -0x1062;
-    DQB = 0x140;
+    DQB = 0x140 << 16;
     OFX = 0;
     OFY = 0;
 }
@@ -3066,13 +3066,15 @@ long RotAverageNclip4(
     SVECTOR* v0, SVECTOR* v1, SVECTOR* v2, SVECTOR* v3, int* sxy0, int* sxy1,
     int* sxy2, int* sxy3, int* p, int* otz, int* flag) {
     unsigned s0, s1, s2, s3, fl1, fl2;
+    long nclip;
     V0 = *v0;
     V1 = *v1;
     V2 = *v2;
     RTPT_BODY(1, 0, s0, s1, s2);
     fl1 = FLAG;
     NCLIP();
-    if (MAC0 > 0) {
+    nclip = MAC0;
+    if (nclip > 0) {
         int ir0;
         V0 = *v3;
         RTPS_BODY(1, 0, s3);
@@ -3086,10 +3088,10 @@ long RotAverageNclip4(
         *p = ir0;
         *flag = (int)(fl1 | fl2);
         *otz = OTZ;
-        return MAC0;
+        return nclip;
     }
     *flag = (int)fl1;
-    return MAC0;
+    return nclip;
 }
 
 static inline void rot_nclip3(
