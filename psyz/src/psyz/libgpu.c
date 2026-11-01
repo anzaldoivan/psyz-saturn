@@ -462,6 +462,24 @@ static void GPU_Enqueue(u_long* packets) {
     unsigned long long current_chain = chain_index++;
     DR_ENV* env = (DR_ENV*)packets;
     gpu_busy = 1;
+#if !(defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__)
+    if (sizeof(u_long) == 4) {
+        // fast path for 32-bit little-endian systems
+        while (1) {
+            if (env->len > 0) {
+                DispatchPackets((u_long*)env->code, (int)env->len);
+            }
+            if (isendprim(env)) {
+                break;
+            }
+            env = (DR_ENV*)nextPrim(env);
+        }
+#ifdef __EMSCRIPTEN__
+        Draw_FlushBuffer();
+#endif
+        return;
+    }
+#endif
     while (1) {
         int env_len = getlen(env);
         TraceOtNode(current_chain, packet_index, env);
