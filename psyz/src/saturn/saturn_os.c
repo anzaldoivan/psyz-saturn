@@ -89,3 +89,17 @@ _Bool __atomic_compare_exchange_4(
     cpu_intc_mask_set(mask);
     return ok;
 }
+
+unsigned int __atomic_fetch_add_4(
+    volatile void* mem, unsigned int val, int model) {
+    volatile unsigned int* p = mem;
+    uint8_t mask = cpu_intc_mask_get();
+    unsigned int old;
+
+    (void)model;
+    cpu_intc_mask_set(15);
+    old = *p;
+    *p = old + val;
+    cpu_intc_mask_set(mask);
+    return old;
+}
