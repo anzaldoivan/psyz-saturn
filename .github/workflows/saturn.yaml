@@ -22,7 +22,7 @@ jobs:
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: ijacquez/libyaul
+          repository: yaul-org/libyaul
           ref: 6012f79f237773378c8014e70d8998ad95a38d98
           path: libyaul
           persist-credentials: false
