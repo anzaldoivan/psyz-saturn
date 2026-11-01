@@ -65,3 +65,27 @@ int Psyz_OsThreadStart(void (*fn)(void), const char* name) {
     (void)name;
     return -1;
 }
+
+// SH-2 has no compare-and-swap; GCC lowers __atomic_compare_exchange_n on a
+// word to this call. Masking interrupts is enough on one CPU.
+_Bool __atomic_compare_exchange_4(
+    volatile void* mem, void* expected, unsigned int desired, _Bool weak,
+    int success, int failure) {
+    volatile unsigned int* p = mem;
+    unsigned int* e = expected;
+    uint8_t mask = cpu_intc_mask_get();
+    _Bool ok;
+
+    (void)weak;
+    (void)success;
+    (void)failure;
+    cpu_intc_mask_set(15);
+    ok = *p == *e;
+    if (ok) {
+        *p = desired;
+    } else {
+        *e = *p;
+    }
+    cpu_intc_mask_set(mask);
+    return ok;
+}
