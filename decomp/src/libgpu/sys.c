@@ -296,7 +296,11 @@ int MoveImage(RECT* rect, int x, int y) {
 #else
     move_image[MOVE_IMAGE_DATA_INDEX + 0] = *(int*)&rect->x;
 #endif
+#ifdef __psyz
     move_image[MOVE_IMAGE_DATA_INDEX + 1] = (u32)(u16)y << 16 | (u16)x;
+#else
+    move_image[MOVE_IMAGE_DATA_INDEX + 1] = y << 0x10 | (u16)x;
+#endif
 #if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
     move_image[MOVE_IMAGE_DATA_INDEX + 2] =
         (u32)(u16)rect->h << 16 | (u16)rect->w;

@@ -66,6 +66,8 @@ typedef struct {
 #else
 #define O_TAG u_long tag
 #define OT_TYPE u_long
+// the PSY-Q libgpu.h has no raw packet mark
+#define setRawMark(p) ((void)0)
 #endif
 
 #endif
