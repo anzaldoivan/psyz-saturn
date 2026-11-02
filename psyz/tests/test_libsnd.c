@@ -146,6 +146,15 @@ static const SeqRow rows_data_entry[] = {
     {4, kKeyOff, 0, 60, 0, 0, 0, 0},
 };
 
+// CC 6 with no parameter number pending only reads the next delta (16)
+static const unsigned char ev_data_entry_delta[] = {
+    SEQ_HEADER, 8, 0xB0, 6, 5, 16, 0x90, 60, 64, 32, 0xFF, 0x2F, 0x00,
+};
+static const SeqRow rows_data_entry_delta[] = {
+    {3, kKeyOn, 0, 60, 64, 127, 64, 0x1000},
+    {5, kKeyOff, 0, 60, 0, 0, 0, 0},
+};
+
 // CC 11 64 sets the program volume: velocity 127 then sounds as volume 64
 static const unsigned char ev_expression[] = {
     SEQ_HEADER, 8, 0xB0, 11, 64, 16, 0x90, 60, 127, 32, 0xFF, 0x2F, 0x00,
@@ -404,6 +413,8 @@ ZTEST(snd_seq, bank_change) {
 }
 
 ZTEST(snd_seq, data_entry) { PLAY_EV(data_entry, 8); }
+
+ZTEST(snd_seq, data_entry_delta) { PLAY_EV(data_entry_delta, 8); }
 
 ZTEST(snd_seq, expression) { PLAY_EV(expression, 8); }
 
