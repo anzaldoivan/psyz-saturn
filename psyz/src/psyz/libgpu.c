@@ -202,14 +202,62 @@ static void GPU_SyncIfPending(void) {
     }
 }
 
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+static u32 be_gp0_word(int code, int i, u32 w) {
+    int colour = i == 0;
+    int uv = 0;
+    int j;
+
+    if (i > 0 && code < 0x40) {
+        int tex = (code & 0x04) != 0;
+        int per = 1 + ((code & 0x10) != 0) + tex;
+
+        j = i - 1;
+        if (j >= 1 + tex) {
+            j = (j - 1 - tex) % per;
+            if (code & 0x10) {
+                colour = j == 0;
+                j--;
+            }
+        }
+        uv = j == 1;
+    } else if (i > 0 && code < 0x60) {
+        colour = (code & 0x10) && i >= 2 && i % 2 == 0;
+    } else if (i > 0) {
+        uv = i == 2 && (code & 0x04);
+    }
+    if (colour)
+        return w >> 24 | (w >> 8 & 0xFF00u) | (w << 8 & 0xFF0000u) | w << 24;
+    w = w >> 16 | w << 16;
+    if (uv)
+        w = (w & 0xFFFF0000u) | (w >> 8 & 0xFFu) | (w << 8 & 0xFF00u);
+    return w;
+}
+static u_long be_words[0x100];
+#define RAW_MARK 0x100
+#else
+#define RAW_MARK 0
+#endif
+
 static void GPU_Enqueue(u_long* packets) {
     DR_ENV* env = (DR_ENV*)packets;
     gpu_busy = 1;
     if (sizeof(u_long) == 4) {
         // fast path for 32-bit systems
         while (1) {
-            if (env->len > 0) {
-                DispatchPackets((u_long*)env->code, (int)env->len);
+            u_long len = env->len & ~(u_long)RAW_MARK;
+            if (len > 0) {
+                u_long* words = (u_long*)env->code;
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+                int code = getcode(env) & ~3;
+                if (!(env->len & 0x100) && code >= 0x20 && code < 0x80) {
+                    const u32* packed = (const u32*)env->code;
+                    for (int i = 0; i < (int)(env->len & 0xFF); i++)
+                        be_words[i] = be_gp0_word(code, i, packed[i]);
+                    words = be_words;
+                }
+#endif
+                DispatchPackets(words, (int)len);
             }
             if (isendprim(env)) {
                 break;
@@ -222,9 +270,10 @@ static void GPU_Enqueue(u_long* packets) {
         return;
     }
     while (1) {
-        if (queue_len + env->len > LEN(queue_buf)) {
-            if (env->len > 0x100) {
-                ERRORF("packet 0x%X long, likely corrupted", env->len);
+        u_long len = env->len & ~(u_long)RAW_MARK;
+        if (queue_len + len > LEN(queue_buf)) {
+            if (len > 0x100) {
+                ERRORF("packet 0x%X long, likely corrupted", (u32)len);
             }
             INFOF("GPU queue full, flushing");
             GPU_Flush();
@@ -236,21 +285,25 @@ static void GPU_Enqueue(u_long* packets) {
             // fine on both 32-bit and 64-bit compiled code.
             // But primitives are mapped from structs, we need to align the data
             int code = getcode(env) & ~3;
-            if (code >= 0x20 && code < 0x80) {
+            if (!(env->len & RAW_MARK) && code >= 0x20 && code < 0x80) {
                 // it is a prim, we need to split
                 u32* prim_data = (u32*)env->code;
-                for (u_long i = 0; i < env->len; i++) {
+                for (u_long i = 0; i < len; i++) {
+#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
+                    queue_buf[queue_len + i] =
+                        be_gp0_word(code, (int)i, prim_data[i]);
+#else
                     queue_buf[queue_len + i] = prim_data[i];
+#endif
                 }
-            } else if (env->len > 0) {
+            } else if (len > 0) {
                 // TODO this is a temporary solution:
                 // if gpu commands get merged with primitives, this will not
                 // work
-                memcpy(queue_buf + queue_len, env->code,
-                       env->len * sizeof(u_long));
+                memcpy(queue_buf + queue_len, env->code, len * sizeof(u_long));
             }
         }
-        queue_len += (int)env->len;
+        queue_len += (int)len;
         if (isendprim(env)) {
             break;
         }
@@ -314,8 +367,8 @@ static int psyz_clr(RECT* rect, u32 color) {
     setlen(&clear_cmd, 4);
     clear_cmd.code[0] = 0xE6000000; // mask bit setting
     clear_cmd.code[1] = (color & 0xFFFFFF) | 0x02000000;
-    clear_cmd.code[2] = (u_long) * (u32*)&rect->x;
-    clear_cmd.code[3] = (u_long) * (u32*)&rect->w;
+    clear_cmd.code[2] = (u32)(u16)rect->y << 16 | (u16)rect->x;
+    clear_cmd.code[3] = (u32)(u16)rect->h << 16 | (u16)rect->w;
 #else
     // Needs a sync so 0xE1 CMDs can update GPU_STATUS before it gets used.
     Psyz_GpuExeque();
@@ -323,11 +376,12 @@ static int psyz_clr(RECT* rect, u32 color) {
     clear_cmd.code[0] = 0xE6000000; // mask bit setting
     clear_cmd.code[1] = 0xE1000000 | GPU_STATUS & 0x7FF | (color >> 0x1F) << 10;
     clear_cmd.code[2] = (color & 0xFFFFFF) | 0x02000000;
-    clear_cmd.code[3] = (u_long) * (u32*)&rect->x;
-    clear_cmd.code[4] = (u_long) * (u32*)&rect->w;
+    clear_cmd.code[3] = (u32)(u16)rect->y << 16 | (u16)rect->x;
+    clear_cmd.code[4] = (u32)(u16)rect->h << 16 | (u16)rect->w;
 #endif
 
     termPrim(&clear_cmd);
+    setRawMark(&clear_cmd);
     GPU_Enqueue((u_long*)&clear_cmd);
     return 0;
 }

@@ -64,6 +64,7 @@ void SetDrawMove(DR_MOVE* p, RECT* rect, int x, int y) {
     p->code[2] = *(int*)&rect->x;
     p->code[3] = (y << 0x10) | (x & 0xFFFF);
     p->code[4] = *(int*)&rect->w;
+    setRawMark(p);
 }
 
 void SetDrawLoad(DR_LOAD* p, RECT* rect) {
@@ -77,6 +78,7 @@ void SetDrawLoad(DR_LOAD* p, RECT* rect) {
     p->code[1] = *(int*)&rect->x;
     p->code[2] = *(int*)&rect->w;
     p->code[len - 1] = 0x01000000;
+    setRawMark(p);
 }
 
 int MargePrim(void* p0, void* p1) {

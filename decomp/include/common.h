@@ -66,6 +66,7 @@ typedef struct {
 #else
 #define O_TAG u_long tag
 #define OT_TYPE u_long
+#define setRawMark(p) ((void)0)
 #endif
 
 #endif
