@@ -14,6 +14,7 @@
 
 #define MODE_SIZE_MASK                                                         \
     (CdlModeSize1 | CdlModeSize0) /* 2340/2328-byte reads unsupported */
+#define SLICE 32 /* sectors per read op while a music stream is on */
 
 int saturn_ds_err;
 
@@ -32,12 +33,29 @@ static struct {
     int tracks;     /* TOC track count at CdInit, 0 = no disc */
     u_char resp[8]; /* last served command's response, for CdSync */
     int resp_len;
+    CdlFILTER filter; /* CdlSetfilter: file, chan */
+    /* a read queued beside the music stream: next FAD, sectors left, done,
+     * slice in flight */
+    u_char* qbuf;
+    uint32_t qfad, qleft, qdone, qslice;
+    int q;
 } cd;
 
 static CdlCB read_cb, sync_cb;
 static u_char cb_result[8]; /* result handed to callbacks: not modelled (N) */
 
 static uint32_t secbuf[SATCD_SECTOR / 4];
+
+/* music hooks (saturn_music.h); saturn_music.c (opt-in) overrides them */
+__attribute__((weak)) int saturn_music_read(uint32_t fad, int chan) {
+    (void)fad;
+    (void)chan;
+    return 0;
+}
+__attribute__((weak)) void saturn_music_end(void) {}
+__attribute__((weak)) int saturn_music_on(void) { return 0; }
+__attribute__((weak)) void saturn_music_step(void) {}
+__attribute__((weak)) void saturn_music_slice(void) {}
 
 static int bcd_ok(u_char b, int max) {
     return (b & 15) <= 9 && (b >> 4) <= 9 && (b >> 4) * 10 + (b & 15) < max;
@@ -92,9 +110,11 @@ int CdPosToInt(CdlLOC* p) {
     return saturn_cd_fad_to_lba(fad);
 }
 
-/* One op in flight: while busy only CdlNop and CdlGetlocP are served (N). */
+/* One op in flight: while busy only CdlNop and CdlGetlocP are served (N).
+ * While a music stream is on no command needs the drive: none is refused. */
 static int refused(u_char com) {
-    return saturn_cd_busy() && com != CdlNop && com != CdlGetlocP;
+    return saturn_cd_busy() && !saturn_music_on() && com != CdlNop &&
+           com != CdlGetlocP;
 }
 
 /* A served command's response {stat, ...} is cached for CdSync and copied to
@@ -145,8 +165,34 @@ static int issue(u_char com, u_char* param, u_char* result) {
         break;
     case CdlNop:
         break;
+    case CdlSetfilter: /* CdlFILTER (LibRef47 p0673) */
+        if (param == 0)
+            return 0;
+        memcpy(&cd.filter, param, sizeof cd.filter);
+        break;
     case CdlPause:
+    case CdlStop:
         cd.playing = 0;
+        saturn_music_end();
+        break;
+    case CdlReadN:
+    case CdlReadS:
+        /* ADPCM (CdlModeRT) reads play the title's music map (saturn_music.c)
+         * from the CdlLOC, else the last Setloc, else the head; no other read
+         * mode is streamed. */
+        if (param) {
+            if (!loc_to_fad(param, &fad))
+                return 0;
+            cd.loc = fad;
+            cd.loc_valid = 1;
+        } else {
+            fad = cd.loc_valid ? cd.loc : cd.head;
+        }
+        if (!(cd.mode & CdlModeRT) ||
+            !saturn_music_read(
+                fad, cd.mode & CdlModeSF ? (int)cd.filter.chan : -1))
+            return 0;
+        cd.head = fad;
         break;
     case CdlGetlocP: /* track, index, rel m:s:f, abs m:s:f (rel reported as abs:
                         N) */
@@ -181,6 +227,11 @@ static int issue(u_char com, u_char* param, u_char* result) {
     case CdlSeekP:
     case CdlPlay:
         fad = cd.loc_valid ? cd.loc : cd.head;
+        if (saturn_music_on()) { /* the stream holds the drive: at once */
+            cd.head = fad;
+            cd.playing = com == CdlPlay;
+            break;
+        }
         if (!saturn_cd_start_seek(fad)) {
             sync_end(CdlDiskError);
             return 0;
@@ -222,7 +273,42 @@ int CdControlF(u_char com, u_char* param) {
 /* LibRef47 p0711: mode 0 waits (bounded here), mode 1 returns now; CdlComplete
  * / CdlDiskError / CdlNoIntr. result gets the last response, its own length
  * only. */
+/* One poll of the drive shared with a music stream: the stream first (it
+ * starts its next unit when the owner is idle and its cover is low), then the
+ * queued read's next slice, landing in order in the caller's buffer. */
+static void drive_step(void) {
+    if (saturn_cd_busy())
+        saturn_cd_poll();
+    if (cd.qslice && !saturn_cd_busy()) {
+        if (saturn_cd_poll() == SATCD_DONE) { /* idle: the slice's end */
+            cd.qbuf += cd.qslice * SATCD_SECTOR;
+            cd.qfad += cd.qslice;
+            cd.qleft -= cd.qslice;
+            cd.qdone += cd.qslice;
+        } else {
+            cd.read_err = 1; /* one-shot -1 for CdReadSync */
+            cd.q = 0;
+            read_end(0);
+        }
+        cd.qslice = 0;
+        if (cd.q && cd.qleft == 0) {
+            cd.q = 0;
+            read_end(1);
+        }
+    }
+    saturn_music_step();
+    if (cd.q && !saturn_cd_busy()) {
+        uint32_t n = cd.qleft < SLICE ? cd.qleft : SLICE;
+        if (saturn_cd_start_read(cd.qfad, n, cd.qbuf)) {
+            cd.qslice = n;
+            saturn_music_slice();
+        }
+    }
+}
+
 int CdSync(int mode, u_char* result) {
+    if (cd.q || saturn_music_on())
+        drive_step();
     if (cd.sync == CdlNoIntr && !cd.read_active) {
         int st = mode == 0 ? saturn_cd_wait() : saturn_cd_poll();
         if (st != SATCD_BUSY)
@@ -237,13 +323,20 @@ int CdSync(int mode, u_char* result) {
  * with no read in flight arms a one-shot -1 for CdReadSync, so a caller that
  * ignores this return never sees 0. */
 int CdRead(int sectors, u_long* buf, int mode) {
+    int q = saturn_music_on() != 0; /* queued: drive_step slices it */
     if (cd.read_active)
         return 0;
     if ((mode & MODE_SIZE_MASK) || !cd.loc_valid || sectors <= 0 || buf == 0 ||
-        !saturn_cd_start_read(cd.loc, (uint32_t)sectors, buf)) {
+        !(q ? saturn_cd_fad_valid(cd.loc, (uint32_t)sectors)
+            : saturn_cd_start_read(cd.loc, (uint32_t)sectors, buf))) {
         cd.read_err = 1;
         return 0;
     }
+    cd.q = q;
+    cd.qbuf = (u_char*)buf;
+    cd.qfad = cd.loc;
+    cd.qleft = (uint32_t)sectors;
+    cd.qdone = cd.qslice = 0;
     cd.head = cd.loc;
     cd.read_active = 1;
     cd.read_err = 0;
@@ -254,7 +347,22 @@ int CdRead(int sectors, u_long* buf, int mode) {
  * once; the 1200-poll age bound is PSY-Q's 0x4B0 VSyncs. */
 int CdReadSync(int mode, u_char* result) {
     int st;
+    uint32_t idle = 0;
     (void)result;
+    while (cd.q) { /* a queued read: one drive step per frame */
+        drive_step();
+        if (!cd.q || mode)
+            break;
+        if (!saturn_cd_busy() && ++idle >= SATCD_WAIT_BOUND) {
+            cd.q = 0; /* no slice could start: bounded as the owner's wait */
+            cd.read_err = 1;
+            read_end(0);
+            break;
+        }
+        saturn_cd_frame_wait();
+    }
+    if (cd.q)
+        return (int)(cd.qleft - (cd.qslice ? saturn_cd_done_sectors() : 0));
     if (!cd.read_active) {
         if (cd.read_err) {
             cd.read_err = 0;
@@ -290,7 +398,9 @@ void saturn_cd_pump(void) {
     int st;
     if (!cd.inited)
         return;
-    if (saturn_cd_busy()) {
+    if (cd.q || saturn_music_on()) {
+        drive_step();
+    } else if (saturn_cd_busy()) {
         st = saturn_cd_poll();
         if (st != SATCD_BUSY && cd.read_active) {
             cd.read_err = st != SATCD_DONE; /* one-shot -1 for CdReadSync */
@@ -317,9 +427,14 @@ void saturn_cd_pump(void) {
  * one -1 from CdReadSync (N). */
 void CdReadBreak(void) {
     if (cd.read_active) {
-        cd.read_err = saturn_cd_done_sectors() == 0;
-        saturn_cd_abort();
-        cd.read_active = 0;
+        uint32_t n = cd.q ? cd.qdone : 0;
+        if (!cd.q || cd.qslice) { /* not a music op */
+            n += saturn_cd_done_sectors();
+            saturn_cd_abort();
+        }
+        cd.read_err = n == 0;
+        cd.read_active = cd.q = 0;
+        cd.qslice = 0;
     }
 }
 

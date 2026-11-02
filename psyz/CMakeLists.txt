@@ -434,6 +434,7 @@ elseif(SATURN)
         src/saturn/saturn_misc.c
         src/saturn/saturn_movie.c
         src/saturn/saturn_movie_decoder.c
+        src/saturn/saturn_music.c
         src/saturn/saturn_os.c
         src/saturn/saturn_pad.c
         src/saturn/saturn_save.c

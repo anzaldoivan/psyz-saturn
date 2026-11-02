@@ -137,6 +137,11 @@ PSYZ_SATURN_MOVIE_SRCS := \
     $(PSYZ_ROOT)/psyz/src/saturn/saturn_movie.c \
     $(PSYZ_ROOT)/psyz/src/saturn/saturn_movie_decoder.c
 
+# The music stream (libcd's XA calls): a title with a music map appends these
+# and its generated map; never in PSYZ_SATURN_SRCS.
+PSYZ_SATURN_MUSIC_SRCS := \
+    $(PSYZ_ROOT)/psyz/src/saturn/saturn_music.c
+
 # -include: getenv/strtoull prototypes libyaul's stdlib.h lacks (saturn_libc.h).
 # -fno-strict-aliasing: core and decomp code type-pun (libgpu.c:433-434 reads
 # RECT shorts as u32 right after storing them; sys.c likewise), which -Os

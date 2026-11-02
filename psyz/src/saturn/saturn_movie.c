@@ -43,7 +43,8 @@
 /* mono sound written this many bytes ahead of the decoder's audio */
 #define MOVIE_SOUND_AHEAD 0x2000
 
-static uint8_t ring[MOVIE_RING];
+/* shared with saturn_music.c: the two never run at once */
+__attribute__((weak)) uint8_t saturn_stream_ring[MOVIE_RING];
 static film_sample_t cache[MOVIE_CACHE];
 static saturn_movie_stats_t stats;
 static struct saturn_cd_stats cd0;
@@ -103,7 +104,7 @@ static void cd_step(void) {
             issued < pos / MOVIE_UNIT + MOVIE_UNITS) {
             if (!saturn_cd_start_read(
                     fad0 + issued * MOVIE_UNIT_SECTORS, unit_sectors(issued),
-                    ring + (issued % MOVIE_UNITS) * MOVIE_UNIT)) {
+                    saturn_stream_ring + (issued % MOVIE_UNITS) * MOVIE_UNIT)) {
                 if (++rejected >= 2)
                     fail(SATURN_MOVIE_CD_REJECT);
                 return;
@@ -229,7 +230,7 @@ static void pump(void) {
                 k = a_end - a_off;
             if (k > e - a_off)
                 k = e - a_off;
-            saturn_spu_movie_write(ring + a_off % MOVIE_RING, k);
+            saturn_spu_movie_write(saturn_stream_ring + a_off % MOVIE_RING, k);
             a_off += k;
             a_done += k;
         }
@@ -256,12 +257,13 @@ static int take(uint8_t* dst, uint32_t n, int audio) {
             if (wait_landed(pos + k))
                 return 1;
             if (dst)
-                memcpy(dst, ring + pos % MOVIE_RING, k);
+                memcpy(dst, saturn_stream_ring + pos % MOVIE_RING, k);
             else if (audio && sound && ahead) {
                 a_used += k;
                 pump();
             } else if (audio && sound)
-                saturn_spu_movie_write(ring + pos % MOVIE_RING, k);
+                saturn_spu_movie_write(
+                    saturn_stream_ring + pos % MOVIE_RING, k);
         }
         pos += k;
         n -= k;
@@ -286,7 +288,7 @@ const uint8_t* movie_stream_view(uint32_t n) {
         pos % MOVIE_RING + n > MOVIE_RING || stats.status != SATURN_MOVIE_END ||
         wait_landed(pos + n))
         return NULL;
-    p = ring + pos % MOVIE_RING;
+    p = saturn_stream_ring + pos % MOVIE_RING;
     pos += n;
     return p;
 }
