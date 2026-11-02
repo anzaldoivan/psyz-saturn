@@ -15,7 +15,7 @@
 
 LOG_LEVEL psyz_logLevel = LOG_LEVEL_I;
 
-// RAM ring buffer: the host reads it out of a save state
+// log ring: the Saturn title has no serial output
 char psyz_saturn_log[LOGSZ];
 volatile unsigned psyz_saturn_log_pos;
 
