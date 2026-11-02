@@ -1,0 +1,97 @@
+#include <stddef.h>
+#include <yaul.h>
+#include "../psyz/os.h"
+
+static uint32_t frt_count_per_ms(void) {
+    int hi = bios_clock_speed_get() == CPU_CLOCK_SPEED_28MHZ;
+    if (vdp2_tvmd_tv_standard_get() == VDP2_TVMD_TV_STANDARD_PAL) {
+        return hi ? CPU_FRT_PAL_352_8_COUNT_1MS : CPU_FRT_PAL_320_8_COUNT_1MS;
+    }
+    return hi ? CPU_FRT_NTSC_352_8_COUNT_1MS : CPU_FRT_NTSC_320_8_COUNT_1MS;
+}
+
+static uint32_t now_us, frt_frac;
+static uint16_t frt_last;
+
+uint32_t Psyz_OsNowUs(void) {
+    uint32_t per_ms = frt_count_per_ms();
+    uint16_t c = cpu_frt_count_get();
+    frt_frac += (uint32_t)(uint16_t)(c - frt_last) * 1000u;
+    frt_last = c;
+    now_us += frt_frac / per_ms;
+    frt_frac %= per_ms;
+    return now_us;
+}
+
+uintptr_t Psyz_OsThreadSelf(void) { return 1; }
+
+#define POOL 4
+
+static int locks[POOL];
+static volatile int bells[POOL];
+static int nlocks, nbells;
+
+void* Psyz_OsLockCreate(void) {
+    return nlocks < POOL ? &locks[nlocks++] : NULL;
+}
+
+void Psyz_OsLock(void* lock) { *(int*)lock = 1; }
+void Psyz_OsUnlock(void* lock) { *(int*)lock = 0; }
+
+void* Psyz_OsBellCreate(void) {
+    return nbells < POOL ? (void*)&bells[nbells++] : NULL;
+}
+
+void Psyz_OsBellRing(void* bell) { *(volatile int*)bell = 1; }
+
+void Psyz_OsBellWait(void* bell, uint32_t timeout_us) {
+    volatile int* b = bell;
+    uint32_t start = Psyz_OsNowUs();
+    while (!*b && (timeout_us == PSYZ_OS_FOREVER ||
+                   Psyz_OsNowUs() - start < timeout_us)) {
+    }
+    *b = 0;
+}
+
+int Psyz_OsThreadStart(void (*fn)(void), const char* name) {
+    (void)fn;
+    (void)name;
+    return -1;
+}
+
+// SH-2 has no compare-and-swap: masking interrupts is enough on one CPU
+_Bool __atomic_compare_exchange_4(
+    volatile void* mem, void* expected, unsigned int desired, _Bool weak,
+    int success, int failure) {
+    volatile unsigned int* p = mem;
+    unsigned int* e = expected;
+    uint8_t mask = cpu_intc_mask_get();
+    _Bool ok;
+
+    (void)weak;
+    (void)success;
+    (void)failure;
+    cpu_intc_mask_set(15);
+    ok = *p == *e;
+    if (ok) {
+        *p = desired;
+    } else {
+        *e = *p;
+    }
+    cpu_intc_mask_set(mask);
+    return ok;
+}
+
+unsigned int __atomic_fetch_add_4(
+    volatile void* mem, unsigned int val, int model) {
+    volatile unsigned int* p = mem;
+    uint8_t mask = cpu_intc_mask_get();
+    unsigned int old;
+
+    (void)model;
+    cpu_intc_mask_set(15);
+    old = *p;
+    *p = old + val;
+    cpu_intc_mask_set(mask);
+    return old;
+}
