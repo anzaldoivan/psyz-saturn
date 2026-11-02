@@ -14,6 +14,7 @@ set(PSYZ_TEST_SOURCES
     test_rgb24.c
     test_libcd.c
     test_libspu.c
+    test_libsnd.c
     test_libpress.c
     test_mdec.c
     test_video.c
