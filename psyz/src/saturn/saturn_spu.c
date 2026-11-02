@@ -115,7 +115,7 @@ extern const unsigned char saturn_spu_driver[] __attribute__((weak)),
     saturn_spu_driver_end[] __attribute__((weak));
 
 enum { ST_IDLE, ST_LOADING, ST_READY, ST_OFF };
-/* sh2_permit write pending; STOP: a re-key's stop form, then ON */
+/* sh2_permit write pending; STOP: the stream's stop form, then ON */
 enum { PERMIT_KEEP, PERMIT_ON, PERMIT_OFF, PERMIT_STOP };
 
 typedef struct { /* our image of _PCM_CTRL; icsr_target is the driver's */
@@ -343,8 +343,8 @@ static void key_on(int v) {
         return;
     }
     loop = RAM16(ram) & 1;
-    /* 1 forward loop, 0xFF PCM_PROTECTED (-1) */
-    en->loop_type = loop ? 1 : 0xFF;
+    /* 1 forward loop, 0xFE PCM_SEMI (-2): permit 1 restarts it in one pass */
+    en->loop_type = loop ? 1 : 0xFE;
     en->bit_depth = pcm16 ? 0 : 1; /* 0 PCM16, 1 PCM8 */
     en->hi = (uint16_t)((ram + 8) >> 16);
     en->lo = (uint16_t)((ram + 8) & 0xFFFFu);
@@ -365,9 +365,7 @@ static void key_on(int v) {
     levels(v, 1);
     s.vs[v].keyed = 1;
     s.vs[v].loop = (uint8_t)loop;
-    /* a protected one-shot still counting down only updates at permit 1: re-key
-     * it with a stop first (left is set for one-shots only) */
-    s.vs[v].permit = s.vs[v].left ? PERMIT_STOP : PERMIT_ON;
+    s.vs[v].permit = PERMIT_ON;
     s.dirty |= 1u << v;
 }
 
@@ -557,8 +555,7 @@ static void write_entry(int v) {
     if (s.vs[v].permit == PERMIT_STOP) { /* stop-then-play, two passes: */
         /* a loop at permit 0 is ended (drv main.c:1153-1170, :517-524) */
         SET8(o + 18, 0);
-        s.vs[v].left = 0;
-        s.vs[v].permit = PERMIT_ON; /* the protected play: next pump */
+        s.vs[v].permit = PERMIT_ON;
     } else if (s.vs[v].permit != PERMIT_KEEP) { /* sh2_permit last */
         SET8(o + 18, s.vs[v].permit == PERMIT_ON);
         if (s.vs[v].permit == PERMIT_ON && !s.vs[v].loop) {
