@@ -41,7 +41,7 @@ typedef struct {
     unsigned other;         /* any other unmapped offset 0x180-0x1FF */
     unsigned bad_offset;    /* odd or out-of-range register offsets */
     unsigned sweep;         /* volume sweep mode (bit 15) at key-on */
-    unsigned stereo;        /* vol L != R at key-on (pan fixed 0) */
+    unsigned stereo;        /* vol L != R at key-on (DIPAN from the pair) */
     unsigned pitch0;        /* key-on with pitch 0: not keyed */
     unsigned key_refused;   /* key-on outside the sample region */
     unsigned mem_refused;   /* MemWrite outside 0x1010..0x6BFE8 */

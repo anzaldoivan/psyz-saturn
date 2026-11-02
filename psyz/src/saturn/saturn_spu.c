@@ -1,7 +1,8 @@
 /* saturn_spu.c -- PS1 SPU seam on the Saturn SCSP through the ponèSound 68000
  * driver. Every register
  * write lands in a 0x200-byte shadow (reads come from it, with the desktop's
- * trans_addr and spustat models, psyz_spu.c:360-376); voice v (0-23) maps onto
+ * trans_addr and spustat models, psyz_spu.c:360-376, and a voice's volumex
+ * from its software envelope); voice v (0-23) maps onto
  * the driver's command entry v (_PCM_CTRL, 20 B). Idle until the first of the
  * five seam calls, which loads the driver once: SNDOFF, common register,
  * clear 0x0..0xC028, copy, SNDON (ST-166 p0022; TB51 p0002-p0003); never a
@@ -38,6 +39,7 @@
 #include "saturn_spu.h"
 #include "saturn_movie.h"
 #include "saturn_pad.h"
+#include "../psyz/spu_voice.h"
 #include <psyz/spu.h>
 #include <string.h>
 
@@ -134,6 +136,7 @@ static struct {
         uint8_t keyed, loop, permit;
         uint32_t left; /* one-shot driver passes left, 0 = uncounted */
     } vs[NV + 2];
+    VoiceState env[NV]; /* the PS1 ADSR, advanced once per pump */
     struct {
         int on, started, nch;
         uint32_t cur;   /* write cursor, the same in every ring */
@@ -243,10 +246,84 @@ static uint8_t side(unsigned x) {
     return (uint8_t)(x > 255 ? 255 : x);
 }
 
+/* log2(x) in 1/4096 steps, x >= 1 */
+static unsigned lg(uint32_t x) {
+    unsigned r;
+    int e = 31, i;
+    while (!(x >> e)) {
+        e--;
+    }
+    x = e > 15 ? x >> (e - 15) : x << (15 - e); /* [1, 2) in 1/0x8000 */
+    r = (unsigned)e << 12;
+    for (i = 11; i >= 0; i--) {
+        x = (x * x) >> 15;
+        if (x >= 0x10000u) {
+            x >>= 1;
+            r |= 1u << i;
+        }
+    }
+    return r;
+}
+
+/* attenuation of x below full in 0.375 dB steps (SCSP TL), 255 for 0:
+ * 20 log10(2) / 0.375 = 16440 / 1024 */
+static unsigned tl(uint32_t x, uint32_t full) {
+    unsigned d;
+    if (!x) {
+        return 255;
+    }
+    d = x < full ? lg(full) - lg(x) : 0;
+    d = (d * 16440u + (1u << 21)) >> 22;
+    return d > 255 ? 255 : d;
+}
+
+/* fixed-mode level clamped to 0x3FFF; a sweep-mode side (bit 15) counts as 0 */
+static unsigned fixed(unsigned x) {
+    return x & 0x8000u ? 0 : x > 0x3FFFu ? 0x3FFFu : x;
+}
+
+static unsigned envx(int v) {
+    return s.env[v].active ? (unsigned)s.env[v].env_vol : 0;
+}
+
+/* volume = 255 - TL(max(L, R)) - TL(ENVX); pan: DIPAN bit 4 = left louder,
+ * the quieter side 3 dB per step (20 log10(2) / 3 = 2055 / 1024), 0xF cut */
+static void levels(int v, int count) {
+    unsigned l = VREG(v, 0), r = VREG(v, 2), m, q, t, p = 0;
+    if (count && ((l | r) & 0x8000u)) {
+        s.stats.sweep++;
+    }
+    if (count && l != r) {
+        s.stats.stereo++;
+    }
+    l = fixed(l);
+    r = fixed(r);
+    m = l > r ? l : r;
+    q = l > r ? r : l;
+    t = tl(m, 0x3FFFu) + tl(envx(v), 0x7FFFu);
+    s.ent[v].volume = (uint8_t)(255 - (t > 255 ? 255 : t));
+    if (l != r) {
+        t = q ? ((lg(m) - lg(q)) * 2055u + (1u << 21)) >> 22 : 15;
+        p = (l > r ? 0x10u : 0) | (t > 15 ? 15 : t);
+    }
+    s.ent[v].pan = (uint8_t)p;
+}
+
+/* a released envelope reached 0: a loop's permit 0, a one-shot's volume 0 */
+static void voice_end(int v) {
+    if (s.vs[v].loop) {
+        s.vs[v].permit = PERMIT_OFF;
+    } else {
+        s.ent[v].volume = 0;
+    }
+    s.dirty |= 1u << v;
+}
+
 static void key_on(int v) {
     uint32_t a = (uint32_t)VREG(v, 6) * 8u, ram = a + SPU_TO_RAM, n, p;
     ent_t* en = &s.ent[v];
-    int loop;
+    VoiceState* e = &s.env[v];
+    int loop, pcm16;
     if (s.st == ST_OFF) {
         return;
     }
@@ -260,22 +337,32 @@ static void key_on(int v) {
         return;
     }
     n = RAM16(ram + 2); /* BE sample header: flags, samples, loop start, 0 */
-    if (!n || ram + 8 + n > MOVIE_LO) {
+    pcm16 = (RAM16(ram) & 2) != 0; /* flag bit 1: 16-bit samples */
+    if (!n || ram + 8 + (n << pcm16) > MOVIE_LO) {
         s.stats.key_refused++;
         return;
     }
     loop = RAM16(ram) & 1;
     /* 1 forward loop, 0xFF PCM_PROTECTED (-1) */
     en->loop_type = loop ? 1 : 0xFF;
-    en->bit_depth = 1; /* PCM8 */
+    en->bit_depth = pcm16 ? 0 : 1; /* 0 PCM16, 1 PCM8 */
     en->hi = (uint16_t)((ram + 8) >> 16);
     en->lo = (uint16_t)((ram + 8) & 0xFFFFu);
     en->lsa = loop ? RAM16(ram + 4) : 0;
     en->playsize = (uint16_t)n;
     en->pitch = pitch_word(p);
-    en->pan = 0;
-    en->volume = volume(v, 1);
-    en->bpb = bpb(p);
+    en->bpb = (uint16_t)(bpb(p) << pcm16); /* bytes, as the driver's timer */
+    /* a fresh attack from 0, as spu_voice_key_on */
+    e->adsr_lo = VREG(v, 8);
+    e->adsr_hi = VREG(v, 0xA);
+    e->env_vol = 0;
+    e->env_counter = 0;
+    e->env_state = ADSR_ATTACK;
+    e->key_off = 0;
+    e->key_off_wait = 0;
+    e->delay_ticks = ENV_KEYON_DELAY_TICKS;
+    e->active = 1;
+    levels(v, 1);
     s.vs[v].keyed = 1;
     s.vs[v].loop = (uint8_t)loop;
     /* a protected one-shot still counting down only updates at permit 1: re-key
@@ -289,12 +376,7 @@ static void key_off(int v) {
         return;
     }
     s.vs[v].keyed = 0;
-    if (s.vs[v].loop) {
-        s.vs[v].permit = PERMIT_OFF;
-    } else {
-        s.ent[v].volume = 0;
-    }
-    s.dirty |= 1u << v;
+    s.env[v].key_off = 1; /* release; voice_end when it reaches 0 */
 }
 
 static void keys(unsigned bits, int base, void (*fn)(int)) {
@@ -324,10 +406,10 @@ static void voice_write(int v, unsigned r) {
         uint32_t p = VREG(v, 4) & 0x3FFFu;
         if (p) {
             s.ent[v].pitch = pitch_word(p);
-            s.ent[v].bpb = bpb(p);
+            s.ent[v].bpb = (uint16_t)(bpb(p) << !s.ent[v].bit_depth);
         }
     } else {
-        s.ent[v].volume = volume(v, 0);
+        levels(v, 0);
     }
     s.dirty |= 1u << v;
 }
@@ -421,6 +503,9 @@ unsigned short Psyz_SpuRead(unsigned int reg_offset) {
     if (reg_offset == R_SPUSTAT) { /* spucnt's low 6 bits; no capture bit 11 */
         return SH(R_SPUCNT) & 0x3Fu;
     }
+    if (reg_offset < R_MAIN_L && (reg_offset & 0xFu) == 0xCu) { /* volumex */
+        return (unsigned short)envx((int)(reg_offset >> 4));
+    }
     /* trans_addr: the desktop's (addr << 3) >> 3 is the stored value */
     return SH(reg_offset);
 }
@@ -477,7 +562,9 @@ static void write_entry(int v) {
     } else if (s.vs[v].permit != PERMIT_KEEP) { /* sh2_permit last */
         SET8(o + 18, s.vs[v].permit == PERMIT_ON);
         if (s.vs[v].permit == PERMIT_ON && !s.vs[v].loop) {
-            s.vs[v].left = en->bpb ? (en->playsize + en->bpb - 1u) / en->bpb
+            /* the driver's timer counts bytes to playsize << (1 - bitDepth) */
+            uint32_t b = (uint32_t)en->playsize << (1 - en->bit_depth);
+            s.vs[v].left = en->bpb ? (b + en->bpb - 1u) / en->bpb
                                    : 0; /* bpb 0: never ends (driver too) */
         }
         s.vs[v].permit = PERMIT_KEEP;
@@ -511,7 +598,23 @@ void saturn_spu_pump(void) {
         if (s.vs[v].keyed && !s.vs[v].loop && s.vs[v].left &&
             s.vs[v].permit == PERMIT_KEEP && !--s.vs[v].left) {
             s.vs[v].keyed = 0;
+            s.env[v].active = 0; /* ENVX 0 */
+            s.env[v].env_vol = 0;
+            s.env[v].env_state = ADSR_OFF;
             s.stats.ended++;
+        }
+    }
+    for (v = 0; v < NV; v++) { /* one frame of SPU ticks per envelope */
+        uint8_t was = s.ent[v].volume;
+        if (!s.env[v].active) {
+            continue;
+        }
+        spu_voice_envelope_advance(&s.env[v], 44100u / SATURN_SPU_FPS);
+        levels(v, 0);
+        if (!s.env[v].active) {
+            voice_end(v);
+        } else if (s.ent[v].volume != was) {
+            s.dirty |= 1u << v;
         }
     }
     for (v = 0; v <= NV + 1; v++) { /* NV, NV + 1: dirty after a begin */

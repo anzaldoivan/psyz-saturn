@@ -56,7 +56,7 @@ static inline void spu_adpcm_decode_block(
             int t = sign4((byte >> (n * 4)) & 0x0F);
             int base =
                 shift > 12 ? (t < 0 ? -128 : 0) : t * (1 << (12 - shift));
-            int s = base + (((prev * f0) >> 5) + ((prev2 * f1) >> 5) >> 1);
+            int s = base + ((((prev * f0) >> 5) + ((prev2 * f1) >> 5)) >> 1);
             short final = clamp16(s);
             out[i * 2 + n] = final;
             prev2 = prev;
