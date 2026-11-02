@@ -129,42 +129,29 @@ static struct {
     (((unsigned int)(unsigned short)(sx)) |                                    \
      (((unsigned int)(unsigned short)(sy)) << 16))
 
-// Moves a GTE colour word to or from memory the way PS1 SWC2/LWC2 do: bytes
-// in little-endian order, so R lands at +0 .. CD at +3.
-// A plain 32-bit access on little-endian hosts; byte by byte on big-endian
-// hosts (Saturn SH-2), where the pun would swap the fields.
 static inline void gte_st_word(void* p, unsigned int v) {
-#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
     unsigned char* b = (unsigned char*)p;
     b[0] = (unsigned char)v;
     b[1] = (unsigned char)(v >> 8);
     b[2] = (unsigned char)(v >> 16);
     b[3] = (unsigned char)(v >> 24);
-#else
-    *(unsigned int*)p = v;
-#endif
 }
-// SXY destinations are DVECTOR memory: two native shorts
-static inline void gte_st_sxy(void* p, unsigned int v) {
-    ((short*)p)[0] = (short)v;
-    ((short*)p)[1] = (short)(v >> 16);
+static inline void gte_st_sxy(void* p, short x, short y) {
+    ((short*)p)[0] = x;
+    ((short*)p)[1] = y;
 }
-// a word read from DVECTOR memory is its native image: SX low on LE, high on BE
-#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
-#define IMG_SX(v) ((short)((v) >> 16))
-#define IMG_SY(v) ((short)(v))
-#else
-#define IMG_SX(v) ((short)(v))
-#define IMG_SY(v) ((short)((v) >> 16))
-#endif
+static inline void ld_sxy(unsigned int v, short* x, short* y) {
+    union {
+        unsigned int w;
+        short s[2];
+    } u = {v};
+    *x = u.s[0];
+    *y = u.s[1];
+}
 static inline unsigned int gte_ld_word(const void* p) {
-#if defined(__BYTE_ORDER__) && __BYTE_ORDER__ == __ORDER_BIG_ENDIAN__
     const unsigned char* b = (const unsigned char*)p;
     return (unsigned int)b[0] | ((unsigned int)b[1] << 8) |
            ((unsigned int)b[2] << 16) | ((unsigned int)b[3] << 24);
-#else
-    return *(const unsigned int*)p;
-#endif
 }
 
 static unsigned int pack_xy(short x, short y);
@@ -2504,18 +2491,18 @@ VECTOR* OuterProduct12(VECTOR* v0, VECTOR* v1, VECTOR* v2) {
     return v2;
 }
 
-void Psyz_GteStsxy(unsigned int* out) { gte_st_sxy(out, pack_xy(SXP, SYP)); }
+void Psyz_GteStsxy(unsigned int* out) { gte_st_sxy(out, SXP, SYP); }
 
 void Psyz_GteStsxy3(
     unsigned int* out0, unsigned int* out1, unsigned int* out2) {
-    gte_st_sxy(out0, pack_xy(SX0, SY0));
-    gte_st_sxy(out1, pack_xy(SX1, SY1));
-    gte_st_sxy(out2, pack_xy(SX2, SY2));
+    gte_st_sxy(out0, SX0, SY0);
+    gte_st_sxy(out1, SX1, SY1);
+    gte_st_sxy(out2, SX2, SY2);
 }
 
 void Psyz_GteStsxy01c(unsigned int* out) {
-    gte_st_sxy(&out[0], pack_xy(SX0, SY0));
-    gte_st_sxy(&out[1], pack_xy(SX1, SY1));
+    gte_st_sxy(&out[0], SX0, SY0);
+    gte_st_sxy(&out[1], SX1, SY1);
 }
 
 #define STSXY3_POLY(type, p)                                                   \
@@ -2699,20 +2686,15 @@ void Psyz_GteLdfc(VECTOR* v) {
     L2.t[2] = v->vz;
 }
 
-void Psyz_GteLdsxy0(unsigned int sxy) {
-    SX0 = IMG_SX(sxy);
-    SY0 = IMG_SY(sxy);
-}
+void Psyz_GteLdsxy0(unsigned int sxy) { ld_sxy(sxy, &SX0, &SY0); }
 
-void Psyz_GteLdsxy1(unsigned int sxy) {
-    SX1 = IMG_SX(sxy);
-    SY1 = IMG_SY(sxy);
-}
+void Psyz_GteLdsxy1(unsigned int sxy) { ld_sxy(sxy, &SX1, &SY1); }
 
 // SXYP reads mirror SXY2
 void Psyz_GteLdsxy2(unsigned int sxy) {
-    SX2 = SXP = IMG_SX(sxy);
-    SY2 = SYP = IMG_SY(sxy);
+    ld_sxy(sxy, &SX2, &SY2);
+    SXP = SX2;
+    SYP = SY2;
 }
 
 void Psyz_GteLdsxy3(unsigned int sxy0, unsigned int sxy1, unsigned int sxy2) {
@@ -2722,7 +2704,7 @@ void Psyz_GteLdsxy3(unsigned int sxy0, unsigned int sxy1, unsigned int sxy2) {
 }
 
 void Psyz_GteLdsxy3c(unsigned int* sxy) {
-    Psyz_GteLdsxy3(sxy[0], sxy[1], sxy[2]); // native images
+    Psyz_GteLdsxy3(sxy[0], sxy[1], sxy[2]);
 }
 
 #define LOAD_ROW0(mat, v)                                                      \
@@ -2743,19 +2725,19 @@ void Psyz_GteStsv(SVECTOR* out) {
     out->vz = IR3;
 }
 
-void Psyz_GteStsxy0(unsigned int* out) { gte_st_sxy(out, SXY(SX0, SY0)); }
-void Psyz_GteStsxy1(unsigned int* out) { gte_st_sxy(out, SXY(SX1, SY1)); }
-void Psyz_GteStsxy2(unsigned int* out) { gte_st_sxy(out, SXY(SX2, SY2)); }
+void Psyz_GteStsxy0(unsigned int* out) { gte_st_sxy(out, SX0, SY0); }
+void Psyz_GteStsxy1(unsigned int* out) { gte_st_sxy(out, SX1, SY1); }
+void Psyz_GteStsxy2(unsigned int* out) { gte_st_sxy(out, SX2, SY2); }
 
 void Psyz_GteStsxy01(unsigned int* out0, unsigned int* out1) {
-    gte_st_sxy(out0, SXY(SX0, SY0));
-    gte_st_sxy(out1, SXY(SX1, SY1));
+    gte_st_sxy(out0, SX0, SY0);
+    gte_st_sxy(out1, SX1, SY1);
 }
 
 void Psyz_GteStsxy3c(unsigned int* out) {
-    gte_st_sxy(&out[0], SXY(SX0, SY0));
-    gte_st_sxy(&out[1], SXY(SX1, SY1));
-    gte_st_sxy(&out[2], SXY(SX2, SY2));
+    gte_st_sxy(&out[0], SX0, SY0);
+    gte_st_sxy(&out[1], SX1, SY1);
+    gte_st_sxy(&out[2], SX2, SY2);
 }
 
 void Psyz_GteSttr(VECTOR* out) {
@@ -2903,12 +2885,9 @@ void Psyz_GteCompMatrix(MATRIX* m0, MATRIX* m1, MATRIX* m2) {
 
 long NormalClip(long sxy0, long sxy1, long sxy2) {
     // TODO can this be simplified with an union?
-    SX0 = IMG_SX(sxy0);
-    SY0 = IMG_SY(sxy0);
-    SX1 = IMG_SX(sxy1);
-    SY1 = IMG_SY(sxy1);
-    SX2 = IMG_SX(sxy2);
-    SY2 = IMG_SY(sxy2);
+    ld_sxy(sxy0, &SX0, &SY0);
+    ld_sxy(sxy1, &SX1, &SY1);
+    ld_sxy(sxy2, &SX2, &SY2);
     NCLIP();
     return MAC0;
 }
@@ -2994,7 +2973,7 @@ long RotTransPers(SVECTOR* v0, int* sxy, int* p, int* flag) {
     fl = FLAG;
     ir0 = IR0;
     z = SZ3 >> 2;
-    gte_st_sxy(sxy, s);
+    gte_st_sxy(sxy, (short)s, (short)(s >> 16));
     *p = ir0;
     *flag = (int)fl;
     return z;
@@ -3012,9 +2991,9 @@ long RotTransPers3(SVECTOR* v0, SVECTOR* v1, SVECTOR* v2, int* sxy0, int* sxy1,
     fl = FLAG;
     ir0 = IR0;
     z = SZ3 >> 2;
-    gte_st_sxy(sxy0, s0);
-    gte_st_sxy(sxy1, s1);
-    gte_st_sxy(sxy2, s2);
+    gte_st_sxy(sxy0, (short)s0, (short)(s0 >> 16));
+    gte_st_sxy(sxy1, (short)s1, (short)(s1 >> 16));
+    gte_st_sxy(sxy2, (short)s2, (short)(s2 >> 16));
     *p = ir0;
     *flag = (int)fl;
     return z;
@@ -3043,9 +3022,9 @@ long RotAverage3(SVECTOR* v0, SVECTOR* v1, SVECTOR* v2, int* sxy0, int* sxy1,
     ir0 = IR0;
     AVSZ3();
     otz = OTZ;
-    gte_st_sxy(sxy0, s0);
-    gte_st_sxy(sxy1, s1);
-    gte_st_sxy(sxy2, s2);
+    gte_st_sxy(sxy0, (short)s0, (short)(s0 >> 16));
+    gte_st_sxy(sxy1, (short)s1, (short)(s1 >> 16));
+    gte_st_sxy(sxy2, (short)s2, (short)(s2 >> 16));
     *flag = (int)fl;
     *p = ir0;
     return otz;
@@ -3067,10 +3046,10 @@ long RotAverage4(SVECTOR* v0, SVECTOR* v1, SVECTOR* v2, SVECTOR* v3, int* sxy0,
     ir0 = IR0;
     AVSZ4();
     otz = OTZ;
-    gte_st_sxy(sxy0, s0);
-    gte_st_sxy(sxy1, s1);
-    gte_st_sxy(sxy2, s2);
-    gte_st_sxy(sxy3, s3);
+    gte_st_sxy(sxy0, (short)s0, (short)(s0 >> 16));
+    gte_st_sxy(sxy1, (short)s1, (short)(s1 >> 16));
+    gte_st_sxy(sxy2, (short)s2, (short)(s2 >> 16));
+    gte_st_sxy(sxy3, (short)s3, (short)(s3 >> 16));
     *p = ir0;
     *flag = (int)(fl1 | fl2);
     return otz;
@@ -3089,9 +3068,9 @@ long RotAverageNclip3(SVECTOR* v0, SVECTOR* v1, SVECTOR* v2, int* sxy0,
         int ir0 = IR0;
         AVSZ3();
         *flag = (int)fl;
-        gte_st_sxy(sxy0, s0);
-        gte_st_sxy(sxy1, s1);
-        gte_st_sxy(sxy2, s2);
+        gte_st_sxy(sxy0, (short)s0, (short)(s0 >> 16));
+        gte_st_sxy(sxy1, (short)s1, (short)(s1 >> 16));
+        gte_st_sxy(sxy2, (short)s2, (short)(s2 >> 16));
         *p = ir0;
         *otz = OTZ;
         return MAC0;
@@ -3117,10 +3096,10 @@ long RotAverageNclip4(
         fl2 = FLAG;
         ir0 = IR0;
         AVSZ4();
-        gte_st_sxy(sxy0, s0);
-        gte_st_sxy(sxy1, s1);
-        gte_st_sxy(sxy2, s2);
-        gte_st_sxy(sxy3, s3);
+        gte_st_sxy(sxy0, (short)s0, (short)(s0 >> 16));
+        gte_st_sxy(sxy1, (short)s1, (short)(s1 >> 16));
+        gte_st_sxy(sxy2, (short)s2, (short)(s2 >> 16));
+        gte_st_sxy(sxy3, (short)s3, (short)(s3 >> 16));
         *p = ir0;
         *flag = (int)(fl1 | fl2);
         *otz = OTZ;
