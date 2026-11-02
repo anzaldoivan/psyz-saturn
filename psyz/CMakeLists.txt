@@ -126,13 +126,35 @@ set(PSYZ_SOURCES
     ../decomp/src/libsnd/cc_101.c
     ../decomp/src/libsnd/cc_11.c
     ../decomp/src/libsnd/cc_121.c
+    ../decomp/src/libsnd/cc_6.c
     ../decomp/src/libsnd/cc_64.c
     ../decomp/src/libsnd/cc_7.c
     ../decomp/src/libsnd/cc_91.c
     ../decomp/src/libsnd/cc_98.c
     ../decomp/src/libsnd/cc_99.c
+    ../decomp/src/libsnd/ccadsr.c
     ../decomp/src/libsnd/cres.c
     ../decomp/src/libsnd/decres.c
+    ../decomp/src/libsnd/de_0.c
+    ../decomp/src/libsnd/de_1.c
+    ../decomp/src/libsnd/de_10.c
+    ../decomp/src/libsnd/de_11.c
+    ../decomp/src/libsnd/de_12.c
+    ../decomp/src/libsnd/de_13.c
+    ../decomp/src/libsnd/de_14.c
+    ../decomp/src/libsnd/de_15.c
+    ../decomp/src/libsnd/de_16.c
+    ../decomp/src/libsnd/de_17.c
+    ../decomp/src/libsnd/de_18.c
+    ../decomp/src/libsnd/de_19.c
+    ../decomp/src/libsnd/de_2.c
+    ../decomp/src/libsnd/de_3.c
+    ../decomp/src/libsnd/de_4.c
+    ../decomp/src/libsnd/de_5.c
+    ../decomp/src/libsnd/de_6.c
+    ../decomp/src/libsnd/de_7.c
+    ../decomp/src/libsnd/de_8.c
+    ../decomp/src/libsnd/de_9.c
     ../decomp/src/libsnd/midibend.c
     ../decomp/src/libsnd/midicc.c
     ../decomp/src/libsnd/midimeta.c
@@ -181,8 +203,10 @@ set(PSYZ_SOURCES
     ../decomp/src/libsnd/ut_rdel.c
     ../decomp/src/libsnd/ut_rdep.c
     ../decomp/src/libsnd/ut_rev.c
+    ../decomp/src/libsnd/ut_rfb.c
     ../decomp/src/libsnd/ut_roff.c
     ../decomp/src/libsnd/ut_ron.c
+    ../decomp/src/libsnd/ut_sva.c
     ../decomp/src/libsnd/ut_vvol.c
     ../decomp/src/libsnd/vm_don.c
     ../decomp/src/libsnd/vm_key.c
@@ -348,13 +372,35 @@ elseif(SATURN)
         ../decomp/src/libsnd/cc_101.c
         ../decomp/src/libsnd/cc_11.c
         ../decomp/src/libsnd/cc_121.c
+        ../decomp/src/libsnd/cc_6.c
         ../decomp/src/libsnd/cc_64.c
         ../decomp/src/libsnd/cc_7.c
         ../decomp/src/libsnd/cc_91.c
         ../decomp/src/libsnd/cc_98.c
         ../decomp/src/libsnd/cc_99.c
+        ../decomp/src/libsnd/ccadsr.c
         ../decomp/src/libsnd/cres.c
         ../decomp/src/libsnd/decres.c
+        ../decomp/src/libsnd/de_0.c
+        ../decomp/src/libsnd/de_1.c
+        ../decomp/src/libsnd/de_10.c
+        ../decomp/src/libsnd/de_11.c
+        ../decomp/src/libsnd/de_12.c
+        ../decomp/src/libsnd/de_13.c
+        ../decomp/src/libsnd/de_14.c
+        ../decomp/src/libsnd/de_15.c
+        ../decomp/src/libsnd/de_16.c
+        ../decomp/src/libsnd/de_17.c
+        ../decomp/src/libsnd/de_18.c
+        ../decomp/src/libsnd/de_19.c
+        ../decomp/src/libsnd/de_2.c
+        ../decomp/src/libsnd/de_3.c
+        ../decomp/src/libsnd/de_4.c
+        ../decomp/src/libsnd/de_5.c
+        ../decomp/src/libsnd/de_6.c
+        ../decomp/src/libsnd/de_7.c
+        ../decomp/src/libsnd/de_8.c
+        ../decomp/src/libsnd/de_9.c
         ../decomp/src/libsnd/midibend.c
         ../decomp/src/libsnd/midicc.c
         ../decomp/src/libsnd/midimeta.c
@@ -394,13 +440,17 @@ elseif(SATURN)
         ../decomp/src/libsnd/ut_ako.c
         ../decomp/src/libsnd/ut_autop.c
         ../decomp/src/libsnd/ut_cadsr.c
+        ../decomp/src/libsnd/ut_gpa.c
+        ../decomp/src/libsnd/ut_gva.c
         ../decomp/src/libsnd/ut_key.c
         ../decomp/src/libsnd/ut_keyv.c
         ../decomp/src/libsnd/ut_rdel.c
         ../decomp/src/libsnd/ut_rdep.c
         ../decomp/src/libsnd/ut_rev.c
+        ../decomp/src/libsnd/ut_rfb.c
         ../decomp/src/libsnd/ut_roff.c
         ../decomp/src/libsnd/ut_ron.c
+        ../decomp/src/libsnd/ut_sva.c
         ../decomp/src/libsnd/ut_vvol.c
         ../decomp/src/libsnd/vm_aloc1.c
         ../decomp/src/libsnd/vm_aloc2.c

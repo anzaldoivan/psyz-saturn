@@ -270,6 +270,7 @@ void _SsSndReplay(short seq_access_num, short arg1);
 void _SsSndTempo(short seq_access_num, short arg1);
 void _SsSndStop(short seq_access_num, short arg1);
 void _SsUtResolveADSR(u16 arg0, u16 arg1, struct Unk* arg2);
+void _SsUtBuildADSR(struct Unk* arg0, u16* arg1, u16* arg2);
 void _SsVmSeqKeyOff(s16 seq_sep_num);
 short _SsVmSetSeqVol(
     short seq_sep_no, unsigned short voll, unsigned short volr, short arg3);

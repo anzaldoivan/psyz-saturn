@@ -17,13 +17,35 @@ PSYZ_SATURN_SRCS := \
     $(PSYZ_ROOT)/decomp/src/libsnd/cc_101.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/cc_11.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/cc_121.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/cc_6.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/cc_64.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/cc_7.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/cc_91.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/cc_98.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/cc_99.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/ccadsr.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/cres.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/decres.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_0.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_1.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_10.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_11.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_12.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_13.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_14.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_15.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_16.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_17.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_18.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_19.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_2.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_3.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_4.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_5.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_6.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_7.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_8.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/de_9.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/midibend.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/midicc.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/midimeta.c \
@@ -63,13 +85,17 @@ PSYZ_SATURN_SRCS := \
     $(PSYZ_ROOT)/decomp/src/libsnd/ut_ako.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ut_autop.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ut_cadsr.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/ut_gpa.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/ut_gva.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ut_key.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ut_keyv.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ut_rdel.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ut_rdep.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ut_rev.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/ut_rfb.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ut_roff.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ut_ron.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/ut_sva.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ut_vvol.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_aloc1.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_aloc2.c \
