@@ -47,13 +47,21 @@ typedef struct {
     unsigned mem_refused;   /* MemWrite outside 0x1010..0x6BFE8 */
     unsigned mem_dropped;   /* MemWrite while the backend is off */
     unsigned ended;         /* one-shots ended by the pump's pass count */
-    unsigned movie_resync;  /* movie writes behind the head: cursor moved */
-    unsigned movie_overrun; /* movie writes ahead past the wait bound */
-    unsigned movie_cur;     /* movie write cursor in the ring */
+    unsigned movie_resync;  /* stream writes behind the head: cursor moved */
+    unsigned movie_overrun; /* stream writes ahead past the wait bound */
+    unsigned movie_cur;     /* stream write cursor in its rings */
 } saturn_spu_stats_t;
 
 void saturn_spu_pump(void); /* from Psyz_VideoVSync only */
 const saturn_spu_stats_t* saturn_spu_stats(void);
+
+/* sound stream on entries 24 (L or mono) and 25 (R): channels 1 or 2, bits 8
+ * or 16; -1 refused (backend not ready, a stream on, other formats) */
+int saturn_spu_stream_begin(uint32_t rate, int channels, int bits);
+/* n bytes per channel, r NULL for mono; paced to entry 24's play position */
+void saturn_spu_stream_write(const uint8_t* l, const uint8_t* r, uint32_t n);
+int saturn_spu_stream_lead(void); /* cursor - play block, bytes; -1 none */
+void saturn_spu_stream_end(void);
 
 #ifdef SATURN_SPU_HOST
 void saturn_spu_host_reset(void); /* host fixtures: back to idle */

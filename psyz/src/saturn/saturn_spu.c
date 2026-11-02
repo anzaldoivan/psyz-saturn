@@ -7,8 +7,8 @@
  * clear 0x0..0xC028, copy, SNDON (ST-166 p0022; TB51 p0002-p0003); never a
  * second pair. saturn_spu_pump() (Psyz_VideoVSync) waits for the driver's
  * ready value, then per frame writes the dirty entries and start = 1: every
- * sound-RAM write except the load, Psyz_SpuMemWrite and the movie stream's
- * ring (saturn_spu_movie_*, entry NV) happens
+ * sound-RAM write except the load, Psyz_SpuMemWrite and the stream's rings
+ * (saturn_spu_stream_*, entries NV and NV + 1) happens
  * there. SATURN_SPU_HOST turns sound RAM and the common register into fixture
  * symbols; multi-byte fields are then composed big-endian.
  *
@@ -56,13 +56,11 @@
 #define REGION_END 0x6BFE8u  /* SPU end below MOVIE_LO */
 #define SPU_TO_RAM 0xB018u   /* 0xC028 - 0x1010 */
 #define ADDR_MAX 0x7F000u    /* PCMEND */
-#define MOVIE_LO 0x77000u    /* movie ring, top of the PCM area */
-#define MOVIE_LEN 0x8000u    /* ring 0x77000-0x7F000 */
-#define NV 24                /* also the movie stream's entry index */
-#define MOVIE_BLK 0x1000u    /* CA granularity: address bits 15..12 */
-#define MOVIE_LEAD 0x2000u   /* cursor ahead of the play block at a resync */
-#define MOVIE_LEAD_MAX (MOVIE_LEN - MOVIE_BLK)
-#define MOVIE_WAIT_BOUND 200000 /* play position reads per write */
+#define MOVIE_LO 0x77000u    /* PCM8 stream span, top of the PCM area */
+#define NV 24                /* also the stream's L (or mono) entry index */
+#define STREAM_SPAN 0x8000u  /* span below ADDR_MAX per byte of a sample */
+#define STREAM_BLK 0x1000u   /* CA granularity, samples: address bits 15..12 */
+#define STREAM_WAIT_BOUND 200000 /* play position reads per write */
 
 /* SPU_RXX offsets (decomp libspu_private.h:84-147) */
 #define R_MAIN_L 0x180u
@@ -131,14 +129,17 @@ static struct {
     uint32_t ctrl, dirty; /* entry 0 offset in sound RAM; voice bits */
     int mvol_dirty;
     uint16_t sh[0x100];
-    ent_t ent[NV + 1]; /* [NV]: the movie stream */
+    ent_t ent[NV + 2]; /* [NV], [NV + 1]: the stream */
     struct {
         uint8_t keyed, loop, permit;
         uint32_t left; /* one-shot driver passes left, 0 = uncounted */
-    } vs[NV + 1];
+    } vs[NV + 2];
     struct {
-        int on, started;
-        uint32_t cur; /* write cursor in the ring */
+        int on, started, nch;
+        uint32_t cur;   /* write cursor, the same in every ring */
+        uint32_t lo[2]; /* ring per channel */
+        uint32_t len;   /* ring bytes */
+        uint32_t blk;   /* CA block bytes */
     } mv;
     saturn_spu_stats_t stats;
 } s;
@@ -234,6 +235,12 @@ static uint8_t volume(int v, int count) {
     r = r & 0x8000u ? 0 : r;
     m = (l > r ? l : r) >> 6;
     return (uint8_t)(m > 255 ? 255 : m);
+}
+
+/* one side's level, as volume() */
+static uint8_t side(unsigned x) {
+    x = x & 0x8000u ? 0 : x >> 6;
+    return (uint8_t)(x > 255 ? 255 : x);
 }
 
 static void key_on(int v) {
@@ -507,7 +514,7 @@ void saturn_spu_pump(void) {
             s.stats.ended++;
         }
     }
-    for (v = 0; v <= NV; v++) { /* NV: dirty only after the movie's begin */
+    for (v = 0; v <= NV + 1; v++) { /* NV, NV + 1: dirty after a begin */
         if (s.dirty & (1u << v)) {
             write_entry(v);
             carry |= (uint32_t)(s.vs[v].permit != PERMIT_KEEP) << v;
@@ -521,112 +528,157 @@ void saturn_spu_pump(void) {
     SET16(SYS_START, 1);
 }
 
-/* movie stream on entry NV: forward loop over the ring, PCM8, centre pan,
- * the CD volume (SPU 0x1B0/0x1B2, PS1 scales CD input before main volume;
- * main volume reaches the stream once, through MVOL); permit 1 at
- * the first write, 0 at end (the driver frees the slot at permit 0); a
- * first write while that 0 is pending restarts the slot (stop form) */
-int saturn_spu_movie_begin(uint32_t rate) {
-    uint32_t p = (rate * 0x1000u + 22050u) / 44100u, o;
-    ent_t* en = &s.ent[NV];
+/* stream: mono on entry NV, stereo L on NV and R on NV + 1; forward loops
+ * over rings ending at ADDR_MAX, 0x8000 B per byte of a sample split per
+ * channel; hard left / right pans (DIPAN bit 4: left, ST-077 p0097); the CD
+ * volume (SPU 0x1B0/0x1B2, PS1 scales CD input before main volume; main
+ * volume reaches the stream once, through MVOL); permit 1 at the first write,
+ * 0 at end (the driver frees the slot at permit 0); a first write while that
+ * 0 is pending restarts the slot (stop form) */
+int saturn_spu_stream_begin(uint32_t rate, int channels, int bits) {
+    uint32_t p = (rate * 0x1000u + 22050u) / 44100u, o, bps, span;
+    ent_t* en;
+    int c;
+    if ((channels != 1 && channels != 2) || (bits != 8 && bits != 16)) {
+        return -1;
+    }
     if (s.st != ST_READY || s.mv.on || !p) {
         return -1;
     }
-    for (o = MOVIE_LO; o < MOVIE_LO + MOVIE_LEN; o += 2) {
+    bps = (uint32_t)bits / 8u;
+    span = STREAM_SPAN * bps;
+    for (o = ADDR_MAX - span; o < ADDR_MAX; o += 2) {
         SET16(o, 0);
     }
-    en->loop_type = 1;
-    en->bit_depth = 1; /* PCM8 */
-    en->hi = (uint16_t)(MOVIE_LO >> 16);
-    en->lo = (uint16_t)(MOVIE_LO & 0xFFFFu);
-    en->lsa = 0;
-    en->playsize = (uint16_t)MOVIE_LEN;
-    en->pitch = pitch_word(p);
-    en->pan = 0;
-    en->volume = volume(R_CD_VOL >> 4, 0);
-    en->bpb = bpb(p);
-    s.vs[NV].loop = 1;
-    s.dirty |= 1u << NV;
+    s.mv.nch = channels;
+    s.mv.len = span / (uint32_t)channels;
+    s.mv.blk = STREAM_BLK * bps;
+    for (c = 0; c < channels; c++) {
+        en = &s.ent[NV + c];
+        s.mv.lo[c] = ADDR_MAX - span + s.mv.len * (uint32_t)c;
+        en->loop_type = 1;
+        en->bit_depth = bits == 8; /* 1: PCM8 */
+        en->hi = (uint16_t)(s.mv.lo[c] >> 16);
+        en->lo = (uint16_t)(s.mv.lo[c] & 0xFFFFu);
+        en->lsa = 0;
+        en->playsize = (uint16_t)(s.mv.len / bps);
+        en->pitch = pitch_word(p);
+        if (channels == 1) {
+            en->pan = 0;
+            en->volume = volume(R_CD_VOL >> 4, 0);
+        } else {
+            en->pan = c ? 0x0F : 0x1F;
+            en->volume = side(SH(R_CD_VOL + 2u * (unsigned)c));
+        }
+        en->bpb = bpb(p);
+        s.vs[NV + c].loop = 1;
+        s.dirty |= 1u << (NV + c);
+    }
     s.mv.on = 1;
     s.mv.started = 0;
     s.mv.cur = 0;
     return 0;
 }
 
-/* the stream slot's play block offset in the ring (CA, address bits 15..12),
- * -1 before the driver gives the stream a slot */
+/* entry NV's play block offset in its ring (CA, address bits 15..12), -1
+ * before the driver gives the stream a slot */
 static int play_pos(void) {
     unsigned slot = RAM8(s.ctrl + ENTRY * NV + 19);
     if (slot > 31u) { /* 0xFF: none */
         return -1;
     }
-    return (int)((((unsigned)READ_MONITOR(slot << 11) >> 7 & 0xFu) << 12) &
-                 (MOVIE_LEN - 1u));
+    return (int)(((unsigned)READ_MONITOR(slot << 11) >> 7 & 0xFu) * s.mv.blk &
+                 (s.mv.len - 1u));
 }
 
-void saturn_spu_movie_write(const uint8_t* pcm, uint32_t n) {
-    uint32_t k, lead, o;
-    int play, i;
+void saturn_spu_stream_write(const uint8_t* l, const uint8_t* r, uint32_t n) {
+    const uint8_t* src[2] = {l, r};
+    uint32_t k, lead, o, m = s.mv.len - 1u;
+    uint32_t lead_min = 2u * s.mv.blk, lead_max = s.mv.len - s.mv.blk;
+    int play, i, c;
     if (!s.mv.on) {
         return;
     }
     if (!s.mv.started) {
         s.mv.started = 1;
-        s.vs[NV].permit =
-            s.vs[NV].permit == PERMIT_OFF ? PERMIT_STOP : PERMIT_ON;
-        s.dirty |= 1u << NV;
+        for (c = 0; c < s.mv.nch; c++) {
+            s.vs[NV + c].permit =
+                s.vs[NV + c].permit == PERMIT_OFF ? PERMIT_STOP : PERMIT_ON;
+            s.dirty |= 1u << (NV + c);
+        }
     }
     play = play_pos();
     if (play >= 0) {
-        lead = (s.mv.cur - (uint32_t)play) & (MOVIE_LEN - 1u);
-        /* behind the head: within MOVIE_LEAD of the play block, whose head
-         * may be up to MOVIE_BLK past it */
-        if (lead < MOVIE_LEAD || lead > MOVIE_LEAD_MAX) {
+        lead = (s.mv.cur - (uint32_t)play) & m;
+        /* behind the head: within lead_min of the play block, whose head
+         * may be up to one block past it */
+        if (lead < lead_min || lead > lead_max) {
             /* [play, cur) may be unplayed: kept */
-            o = lead < MOVIE_LEAD ? s.mv.cur : (uint32_t)play;
-            s.mv.cur = ((uint32_t)play + MOVIE_LEAD) & (MOVIE_LEN - 1u);
-            for (; o != s.mv.cur; o = (o + 1u) & (MOVIE_LEN - 1u)) {
-                SET8(MOVIE_LO + o, 0); /* stale bytes the head reaches */
+            o = lead < lead_min ? s.mv.cur : (uint32_t)play;
+            s.mv.cur = ((uint32_t)play + lead_min) & m;
+            for (; o != s.mv.cur; o = (o + 1u) & m) {
+                for (c = 0; c < s.mv.nch; c++) {
+                    SET8(s.mv.lo[c] + o, 0); /* stale bytes the head reaches */
+                }
             }
             s.stats.movie_resync++;
-        } else if (lead + n > MOVIE_LEAD_MAX) { /* ahead: wait for the head */
-            for (i = 0; i < MOVIE_WAIT_BOUND && play >= 0 &&
-                        ((s.mv.cur - (uint32_t)play) & (MOVIE_LEN - 1u)) + n >
-                            MOVIE_LEAD_MAX;
+        } else if (lead + n > lead_max) { /* ahead: wait for the head */
+            for (i = 0; i < STREAM_WAIT_BOUND && play >= 0 &&
+                        ((s.mv.cur - (uint32_t)play) & m) + n > lead_max;
                  i++) {
                 play = play_pos();
             }
-            if (i == MOVIE_WAIT_BOUND) {
+            if (i == STREAM_WAIT_BOUND) {
                 s.stats.movie_overrun++;
             }
         }
     }
     while (n) { /* 16-bit words at an even cursor (put), split at the wrap */
-        k = MOVIE_LEN - s.mv.cur;
+        k = s.mv.len - s.mv.cur;
         k = k < n ? k : n;
-        put(MOVIE_LO + s.mv.cur, pcm, k);
-        s.mv.cur = (s.mv.cur + k) & (MOVIE_LEN - 1u);
-        pcm += k;
+        for (c = 0; c < s.mv.nch; c++) {
+            if (src[c]) {
+                put(s.mv.lo[c] + s.mv.cur, src[c], k);
+                src[c] += k;
+            }
+        }
+        s.mv.cur = (s.mv.cur + k) & m;
         n -= k;
     }
 }
 
-int saturn_spu_movie_lead(void) {
+int saturn_spu_stream_lead(void) {
     int play = s.mv.on ? play_pos() : -1;
     if (play < 0) {
         return -1;
     }
-    return (int)((s.mv.cur - (uint32_t)play) & (MOVIE_LEN - 1u));
+    return (int)((s.mv.cur - (uint32_t)play) & (s.mv.len - 1u));
 }
 
-void saturn_spu_movie_end(void) {
+void saturn_spu_stream_end(void) {
+    int c;
     if (!s.mv.on) {
         return;
     }
     s.mv.on = 0;
-    s.vs[NV].permit = PERMIT_OFF;
-    s.dirty |= 1u << NV;
+    for (c = 0; c < s.mv.nch; c++) {
+        s.vs[NV + c].permit = PERMIT_OFF;
+        s.dirty |= 1u << (NV + c);
+    }
 }
+
+/* the movie: mono PCM8 */
+int saturn_spu_movie_begin(uint32_t rate) {
+    return saturn_spu_stream_begin(rate, 1, 8);
+}
+
+void saturn_spu_movie_write(const uint8_t* pcm, uint32_t n) {
+    saturn_spu_stream_write(pcm, NULL, n);
+}
+
+int saturn_spu_movie_lead(void) { return saturn_spu_stream_lead(); }
+
+void saturn_spu_movie_end(void) { saturn_spu_stream_end(); }
 
 const saturn_spu_stats_t* saturn_spu_stats(void) {
     s.stats.state = (unsigned)s.st;
