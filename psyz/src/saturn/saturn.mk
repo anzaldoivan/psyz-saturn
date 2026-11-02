@@ -11,9 +11,27 @@ PSYZ_SATURN_SRCS := \
     $(PSYZ_ROOT)/decomp/src/libgpu/ext.c \
     $(PSYZ_ROOT)/decomp/src/libgpu/prim.c \
     $(PSYZ_ROOT)/decomp/src/libgpu/sys.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/cc_0.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/cc_10.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/cc_100.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/cc_101.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/cc_11.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/cc_121.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/cc_64.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/cc_7.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/cc_91.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/cc_98.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/cc_99.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/cres.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/decres.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/midibend.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/midicc.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/midimeta.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/midinote.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/midiprog.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/midiread.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/miditime.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/next.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/pause.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/play.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/playmode.c \
@@ -41,6 +59,7 @@ PSYZ_SATURN_SRCS := \
     $(PSYZ_ROOT)/decomp/src/libsnd/sstick.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/sstickcb.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ssvol.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/tempo.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ut_ako.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ut_autop.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/ut_cadsr.c \
@@ -56,14 +75,20 @@ PSYZ_SATURN_SRCS := \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_aloc2.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_autop.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_doff.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/vm_don.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_f.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_g.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_init.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/vm_key.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_n2p.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_noff.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_nowof.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_nowon.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/vm_pb.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/vm_prog.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_seq.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/vm_stav.c \
+    $(PSYZ_ROOT)/decomp/src/libsnd/vm_vol.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vm_vsu.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vol.c \
     $(PSYZ_ROOT)/decomp/src/libsnd/vs_mono.c \

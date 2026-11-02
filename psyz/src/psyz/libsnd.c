@@ -73,10 +73,6 @@ void _SsInit(void) {
 
 // void _SsVmFlush(void) { NOT_IMPLEMENTED; }
 
-void _SsSeqPlay(short arg0, short arg1) { NOT_IMPLEMENTED; }
-
-void _SsSndTempo(short arg0, short arg1) { NOT_IMPLEMENTED; }
-
 void SsSetMarkCallback(
     short access_num, short seq_num, SsMarkCallbackProc proc) {
     NOT_IMPLEMENTED;
@@ -178,31 +174,7 @@ void SeAutoPan(short arg0, short arg1, short arg2, short arg3) {
     NOT_IMPLEMENTED;
 }
 
-void _SsNoteOn(short a0, short a1, unsigned char a2, unsigned char a3) {
-    NOT_IMPLEMENTED;
-}
-void _SsSetProgramChange(short a0, short a1, unsigned char a2) {
-    NOT_IMPLEMENTED;
-}
-void _SsGetMetaEvent(short a0, short a1, unsigned char a2) { NOT_IMPLEMENTED; }
-void _SsSetPitchBend(short a0, short a1) { NOT_IMPLEMENTED; }
-void _SsSetControlChange(short a0, short a1, unsigned char a2) {
-    NOT_IMPLEMENTED;
-}
-void _SsContBankChange(short a0, short a1) { NOT_IMPLEMENTED; }
 void _SsContDataEntry(short a0, short a1, unsigned char a2) { NOT_IMPLEMENTED; }
-void _SsContMainVol(short a0, short a1, unsigned char a2) { NOT_IMPLEMENTED; }
-void _SsContPanpot(short a0, short a1, unsigned char a2) { NOT_IMPLEMENTED; }
-void _SsContExpression(short a0, short a1, unsigned char a2) {
-    NOT_IMPLEMENTED;
-}
-void _SsContDamper(short a0, short a1, unsigned char a2) { NOT_IMPLEMENTED; }
-void _SsContExternal(short a0, short a1, unsigned char a2) { NOT_IMPLEMENTED; }
-void _SsContNrpn1(short a0, short a1, unsigned char a2) { NOT_IMPLEMENTED; }
-void _SsContNrpn2(short a0, short a1, unsigned char a2) { NOT_IMPLEMENTED; }
-void _SsContRpn1(short a0, short a1, unsigned char a2) { NOT_IMPLEMENTED; }
-void _SsContRpn2(short a0, short a1, unsigned char a2) { NOT_IMPLEMENTED; }
-void _SsContResetAll(short a0, short a1) { NOT_IMPLEMENTED; }
 
 void _SsSetNrpnVabAttr0(
     short a0, short a1, short a2, VagAtr a3, short a4, unsigned char a5) {

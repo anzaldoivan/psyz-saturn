@@ -289,6 +289,28 @@ unsigned short note2pitch2(unsigned short note, unsigned short fine);
 void _SsVmKeyOnNow(unsigned short vagCount, unsigned short pitch);
 int _SsVmVSetUp(short vabId, short prog);
 void _SsVmDoAllocate(void);
+unsigned short note2pitch(void);
+void _SsVmKeyOffNow(int mode);
+void _SsVmDamperOn(void);
+unsigned char _SsVmSelectToneAndVag(u8* toneIdx, u8* vagIdx);
+int _SsVmKeyOn(short seq_sep_no, short vabId, short prog, unsigned short note,
+               unsigned short voll, unsigned short volr);
+int _SsVmKeyOff(short seq_sep_no, short vabId, short prog, unsigned short note);
+void _SsVmSeKeyOff(short vabId, short prog, unsigned short note);
+void KeyOnCheck(void);
+int _SsVmSetVol(short seq_sep_no, short vabId, short prog, unsigned short vol,
+                unsigned short pan);
+int _SsVmSetProgVol(short vabId, short prog, unsigned char vol);
+int _SsVmGetProgVol(short vabId, short prog);
+int _SsVmSetProgPan(short vabId, short prog, unsigned char pan);
+int _SsVmGetProgPan(short vabId, short prog);
+short _SsVmPBVoice(short voice, short seq_sep_no, short vabId, short prog,
+                   unsigned short bend);
+int _SsVmPitchBend(
+    short seq_sep_no, short vabId, short prog, unsigned short bend);
+void _SsSndNextSep(short sep_access_num, short seq_num);
+void _SsSeqGetEof(short seq_access_num, short seq_num);
+void _SsGetSeqData(short seq_access_num, short seq_num);
 
 void _SsNoteOn(short a0, short a1, unsigned char a2, unsigned char a3);
 void _SsSetProgramChange(short a0, short a1, unsigned char a2);

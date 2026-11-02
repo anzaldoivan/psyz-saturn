@@ -120,9 +120,27 @@ set(PSYZ_SOURCES
     ../decomp/src/libspu/sr_gaks.c
     ../decomp/src/libspu/sr_sv.c
     src/psyz/libspu.c
+    ../decomp/src/libsnd/cc_0.c
+    ../decomp/src/libsnd/cc_10.c
+    ../decomp/src/libsnd/cc_100.c
+    ../decomp/src/libsnd/cc_101.c
+    ../decomp/src/libsnd/cc_11.c
+    ../decomp/src/libsnd/cc_121.c
+    ../decomp/src/libsnd/cc_64.c
+    ../decomp/src/libsnd/cc_7.c
+    ../decomp/src/libsnd/cc_91.c
+    ../decomp/src/libsnd/cc_98.c
+    ../decomp/src/libsnd/cc_99.c
     ../decomp/src/libsnd/cres.c
     ../decomp/src/libsnd/decres.c
+    ../decomp/src/libsnd/midibend.c
+    ../decomp/src/libsnd/midicc.c
+    ../decomp/src/libsnd/midimeta.c
+    ../decomp/src/libsnd/midinote.c
+    ../decomp/src/libsnd/midiprog.c
+    ../decomp/src/libsnd/midiread.c
     ../decomp/src/libsnd/miditime.c
+    ../decomp/src/libsnd/next.c
     ../decomp/src/libsnd/pause.c
     ../decomp/src/libsnd/play.c
     ../decomp/src/libsnd/playmode.c
@@ -152,6 +170,7 @@ set(PSYZ_SOURCES
     ../decomp/src/libsnd/sstable.c
     ../decomp/src/libsnd/sstick.c
     ../decomp/src/libsnd/sstickcb.c
+    ../decomp/src/libsnd/tempo.c
     ../decomp/src/libsnd/ut_ako.c
     ../decomp/src/libsnd/ut_autop.c
     ../decomp/src/libsnd/ut_cadsr.c
@@ -165,6 +184,12 @@ set(PSYZ_SOURCES
     ../decomp/src/libsnd/ut_roff.c
     ../decomp/src/libsnd/ut_ron.c
     ../decomp/src/libsnd/ut_vvol.c
+    ../decomp/src/libsnd/vm_don.c
+    ../decomp/src/libsnd/vm_key.c
+    ../decomp/src/libsnd/vm_pb.c
+    ../decomp/src/libsnd/vm_prog.c
+    ../decomp/src/libsnd/vm_stav.c
+    ../decomp/src/libsnd/vm_vol.c
     ../decomp/src/libsnd/vol.c
     ../decomp/src/libsnd/vm_aloc1.c
     ../decomp/src/libsnd/vm_aloc2.c
@@ -317,9 +342,27 @@ elseif(SATURN)
         ../decomp/src/libgpu/ext.c
         ../decomp/src/libgpu/prim.c
         ../decomp/src/libgpu/sys.c
+        ../decomp/src/libsnd/cc_0.c
+        ../decomp/src/libsnd/cc_10.c
+        ../decomp/src/libsnd/cc_100.c
+        ../decomp/src/libsnd/cc_101.c
+        ../decomp/src/libsnd/cc_11.c
+        ../decomp/src/libsnd/cc_121.c
+        ../decomp/src/libsnd/cc_64.c
+        ../decomp/src/libsnd/cc_7.c
+        ../decomp/src/libsnd/cc_91.c
+        ../decomp/src/libsnd/cc_98.c
+        ../decomp/src/libsnd/cc_99.c
         ../decomp/src/libsnd/cres.c
         ../decomp/src/libsnd/decres.c
+        ../decomp/src/libsnd/midibend.c
+        ../decomp/src/libsnd/midicc.c
+        ../decomp/src/libsnd/midimeta.c
+        ../decomp/src/libsnd/midinote.c
+        ../decomp/src/libsnd/midiprog.c
+        ../decomp/src/libsnd/midiread.c
         ../decomp/src/libsnd/miditime.c
+        ../decomp/src/libsnd/next.c
         ../decomp/src/libsnd/pause.c
         ../decomp/src/libsnd/play.c
         ../decomp/src/libsnd/playmode.c
@@ -347,6 +390,7 @@ elseif(SATURN)
         ../decomp/src/libsnd/sstick.c
         ../decomp/src/libsnd/sstickcb.c
         ../decomp/src/libsnd/ssvol.c
+        ../decomp/src/libsnd/tempo.c
         ../decomp/src/libsnd/ut_ako.c
         ../decomp/src/libsnd/ut_autop.c
         ../decomp/src/libsnd/ut_cadsr.c
@@ -362,14 +406,20 @@ elseif(SATURN)
         ../decomp/src/libsnd/vm_aloc2.c
         ../decomp/src/libsnd/vm_autop.c
         ../decomp/src/libsnd/vm_doff.c
+        ../decomp/src/libsnd/vm_don.c
         ../decomp/src/libsnd/vm_f.c
         ../decomp/src/libsnd/vm_g.c
         ../decomp/src/libsnd/vm_init.c
+        ../decomp/src/libsnd/vm_key.c
         ../decomp/src/libsnd/vm_n2p.c
         ../decomp/src/libsnd/vm_noff.c
         ../decomp/src/libsnd/vm_nowof.c
         ../decomp/src/libsnd/vm_nowon.c
+        ../decomp/src/libsnd/vm_pb.c
+        ../decomp/src/libsnd/vm_prog.c
         ../decomp/src/libsnd/vm_seq.c
+        ../decomp/src/libsnd/vm_stav.c
+        ../decomp/src/libsnd/vm_vol.c
         ../decomp/src/libsnd/vm_vsu.c
         ../decomp/src/libsnd/vol.c
         ../decomp/src/libsnd/vs_mono.c
