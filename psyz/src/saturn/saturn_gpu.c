@@ -52,6 +52,32 @@ enum {
 volatile unsigned psyz_cart_stats[8][16];
 #define CS(i) psyz_cart_stats[0][CS_##i]
 
+#ifndef PSYZ_SATURN_TEX_LRU
+#define PSYZ_SATURN_TEX_LRU 0 // 1: LRU texture cache, 0: drop-all
+#endif
+
+// texture cache policy counters, read from a save state by the host; each
+// key column is followed by its byte column
+enum {
+    TS_POLICY,  // PSYZ_SATURN_TEX_LRU as built
+    TS_UPLOADS, // miss conversions
+    TS_UP_BYTES,
+    TS_EV_CAP, // live keys reclaimed for space
+    TS_EV_CAP_BYTES,
+    TS_EV_INVAL, // dead keys reclaimed
+    TS_EV_INVAL_BYTES,
+    TS_EV_REFUSAL, // live keys dropped after a refused allocation
+    TS_EV_REFUSAL_BYTES,
+    TS_REFUSALS,          // misses refused, counted unsupported
+    TS_SLOT_REFUSALS,     // of those, the key table full
+    TS_PINNED_AT_REFUSAL, // max keys held for the open list at a refusal
+    TS_FREE_LARGEST,      // largest free block at the last commit end
+    TS_FRAG_REFUSALS,     // refusals with enough free bytes, none contiguous
+    TS_COUNT,
+};
+volatile unsigned psyz_tex_stats[TS_COUNT];
+#define TS(i) psyz_tex_stats[TS_##i]
+
 // FRT ticks extended past 16 bits; sampled often enough that no delta wraps
 static uint32_t frt_ext;
 static uint16_t frt_last;
@@ -68,11 +94,19 @@ static unsigned npoly, unsupported;
 static int16_vec2_t sysclip = INT16_VEC2_INITIALIZER(319, 239);
 static int16_vec2_t local;
 static uint16_t* tex_arena; // VDP1 VRAM: start of libyaul's texture partition
+#if !PSYZ_SATURN_TEX_LRU
 static unsigned tex_arena_used;    // bytes, reset by the drop-all eviction
 static unsigned tex_evict_pending; // drop-all deferred to the end of commit
+#endif
 #define TEX_CACHE_BYTES 262144
 static unsigned tex_nkeys; // slots used, dead ones included
-static void tex_drop(void);
+#if PSYZ_SATURN_TEX_LRU
+static unsigned tex_clock; // +1 per lookup; a hit or an insert stamps the key
+static unsigned tex_pin;   // tex_clock at the end of the last commit
+static unsigned tex_gap(unsigned need, unsigned* big, unsigned* sum);
+#else
+static void tex_drop(int refusal);
+#endif
 static unsigned wram_bytes(void);
 
 static void fail(const char* fn) {
@@ -588,6 +622,7 @@ static void ensure_init(void) {
         return;
     }
     CS(WRAM_BYTES) = wram_bytes();
+    TS(POLICY) = PSYZ_SATURN_TEX_LRU;
     vdp1_vram_partitions_get(&vp);
     tex_arena = vp.texture_base;
     vdp1_env_default_init(&env);
@@ -658,14 +693,25 @@ static void commit(void) {
     psyz_saturn_stats[2] = npoly;
     npoly = 0;
     unsupported = 0;
+#if PSYZ_SATURN_TEX_LRU
+    {
+        unsigned big, sum;
+        tex_pin = tex_clock; // no command references the arena any more
+        tex_gap(TEX_CACHE_BYTES, &big, &sum);
+        TS(FREE_LARGEST) = big;
+    }
+#else
     if (tex_evict_pending) { // no command references the arena any more
-        tex_drop();
+        tex_drop(1);
     }
     // half-mark drop-all keeps a list of <= 32 new keys / 128 KiB
     // from filling mid-list; dead-slot reuse or LRU if the hit rate needs it
     if (tex_nkeys > MAXPOLY / 2 || tex_arena_used > TEX_CACHE_BYTES / 2) {
-        tex_drop();
+        tex_drop(0);
     }
+    TS(FREE_LARGEST) =
+        TEX_CACHE_BYTES + 16 - ((tex_arena_used + 2 + 15) & ~15u);
+#endif
     t = tick();
     CS(FRAME_TICKS) += t - frame_start;
     frame_start = t;
@@ -1023,6 +1069,11 @@ static struct TexKey {
     unsigned tx, ty, tpf, clut, u, v, w, h;
     unsigned rx, ry, rw, rh; // texel footprint, PS1 VRAM halfwords
     unsigned cx, cy, cw;     // CLUT footprint (cw 0: none)
+    unsigned n;              // converted bytes, 0 for a free slot
+#if PSYZ_SATURN_TEX_LRU
+    unsigned use; // tex_clock at the last hit or insert
+    unsigned off; // block start: 16 bytes, guard at off + 14, then n bytes
+#endif
     uint16_t* p;
 } tex_keys[MAXPOLY];
 
@@ -1049,14 +1100,55 @@ static void tex_dirty(int x, int y, int w, int h) {
     }
 }
 
+// bytes of a reclaimed key by cause: dead, else space or refusal
+static void tex_count_ev(const struct TexKey* k, int refusal) {
+    unsigned c = !k->w ? TS_EV_INVAL : refusal ? TS_EV_REFUSAL : TS_EV_CAP;
+    psyz_tex_stats[c]++;
+    psyz_tex_stats[c + 1] += k->n;
+}
+
+#if PSYZ_SATURN_TEX_LRU
+// lowest gap of at least need bytes between held blocks, TEX_CACHE_BYTES if
+// none; *big the largest gap, *sum all free bytes. O(keys^2), keys <= 64
+static unsigned tex_gap(unsigned need, unsigned* big, unsigned* sum) {
+    unsigned at = 0, fit = TEX_CACHE_BYTES, i, next;
+    *big = *sum = 0;
+    for (;;) {
+        struct TexKey* b = NULL;
+        for (i = 0; i < tex_nkeys; i++) {
+            struct TexKey* k = &tex_keys[i];
+            if (k->n && k->off >= at && (!b || k->off < b->off)) {
+                b = k;
+            }
+        }
+        next = b ? b->off : TEX_CACHE_BYTES;
+        if (next - at >= need && fit == TEX_CACHE_BYTES) {
+            fit = at;
+        }
+        if (next - at > *big) {
+            *big = next - at;
+        }
+        *sum += next - at;
+        if (!b) {
+            return fit;
+        }
+        at = b->off + 16 + b->n;
+    }
+}
+#else
 // drop-all, LRU or a mid-list commit if churn shows it
-static void tex_drop(void) {
+static void tex_drop(int refusal) {
+    unsigned i;
+    for (i = 0; i < tex_nkeys; i++) {
+        tex_count_ev(&tex_keys[i], refusal);
+    }
     tex_nkeys = 0;
     tex_arena_used = 0;
     tex_evict_pending = 0;
     CS(EVICTIONS)++;
     CS(LIVE) = 0;
 }
+#endif
 
 // PS1 VRAM halfword from the cart shadow, else from the texture store, where
 // outside every rect reads 0x0000
@@ -1103,28 +1195,86 @@ static void sprite(int x, int y, unsigned w, unsigned h, unsigned w2) {
         return;
     }
     CS(LOOKUPS)++;
+#if PSYZ_SATURN_TEX_LRU
+    tex_clock++;
+#endif
     for (i = 0; i < tex_nkeys && !p; i++) {
         struct TexKey* k = &tex_keys[i];
         if (k->tx == texpage.tx && k->ty == texpage.ty &&
             k->tpf == texpage.tpf && k->clut == clut && k->u == u &&
             k->v == v && k->w == w && k->h == h) {
             p = k->p;
+#if PSYZ_SATURN_TEX_LRU
+            k->use = tex_clock;
+#endif
         }
     }
     if (p) {
         CS(HITS)++;
     } else {
+#if PSYZ_SATURN_TEX_LRU
+        // first fit, else reclaim the oldest unpinned key (dead ones first)
+        // and retry; a key used since the last commit is pinned: pending
+        // commands read its bytes. Wrap-safe for < 2^31 lookups a commit
+        unsigned need = 16 + wpad * h * 2, big, sum, slot, pinned;
+        for (;;) {
+            struct TexKey* o = NULL;
+            start = tex_gap(need, &big, &sum);
+            for (slot = 0; slot < tex_nkeys && tex_keys[slot].n; slot++) {
+            }
+            if (start < TEX_CACHE_BYTES && slot < MAXPOLY) {
+                break;
+            }
+            for (i = pinned = 0; i < tex_nkeys; i++) {
+                struct TexKey* k = &tex_keys[i];
+                if (!k->n) {
+                    continue;
+                }
+                if ((int)(k->use - tex_pin) > 0) {
+                    pinned++;
+                } else if (!o || (!k->w && o->w) ||
+                           (!k->w == !o->w && (int)(k->use - o->use) < 0)) {
+                    o = k;
+                }
+            }
+            if (!o) {
+                CS(FULL)++;
+                TS(REFUSALS)++;
+                TS(SLOT_REFUSALS) += slot >= MAXPOLY;
+                TS(FRAG_REFUSALS) += start == TEX_CACHE_BYTES && sum >= need;
+                if (pinned > TS(PINNED_AT_REFUSAL)) {
+                    TS(PINNED_AT_REFUSAL) = pinned;
+                }
+                unsupported++;
+                return;
+            }
+            tex_count_ev(o, 0);
+            if (o->w) {
+                CS(LIVE)--;
+            }
+            o->w = 0;
+            o->n = 0;
+            CS(EVICTIONS)++;
+        }
+        start += 16;
+#else
         start = (tex_arena_used + 2 + 15) & ~15u;
         if (tex_nkeys >= MAXPOLY || start + wpad * h * 2 > TEX_CACHE_BYTES) {
             if (npoly) { // pending commands read the arena: drop at commit
                 CS(FULL)++;
+                TS(REFUSALS)++;
+                TS(SLOT_REFUSALS) += tex_nkeys >= MAXPOLY;
+                if (tex_nkeys > TS(PINNED_AT_REFUSAL)) {
+                    TS(PINNED_AT_REFUSAL) = tex_nkeys;
+                }
                 tex_evict_pending = 1;
                 unsupported++;
                 return;
             }
-            tex_drop();
+            tex_drop(0);
             start = 16;
         }
+#endif
         p = tex_arena + start / 2;
         p[-1] = 0x0000; // guard
         t0 = t = tick();
@@ -1141,10 +1291,18 @@ static void sprite(int x, int y, unsigned w, unsigned h, unsigned w2) {
         } else {
             CS(BYTES_STORE) += wpad * h * 2;
         }
+        TS(UPLOADS)++;
+        TS(UP_BYTES) += wpad * h * 2;
+#if PSYZ_SATURN_TEX_LRU
+        if (start + wpad * h * 2 > CS(ARENA_HIGH)) {
+            CS(ARENA_HIGH) = start + wpad * h * 2;
+        }
+#else
         tex_arena_used = start + wpad * h * 2;
         if (tex_arena_used > CS(ARENA_HIGH)) {
             CS(ARENA_HIGH) = tex_arena_used;
         }
+#endif
         {
             // footprint: texel rect (x0, halfword width, rows), the whole
             // page width or height when u or v wraps; CLUT rect for tpf 0, 1
@@ -1166,8 +1324,16 @@ static void sprite(int x, int y, unsigned w, unsigned h, unsigned w2) {
             k.cx = (clut & 0x3F) * 16;
             k.cy = (clut >> 6) & 0x1FF;
             k.cw = texpage.tpf == 2 ? 0 : texpage.tpf ? 256 : 16;
+            k.n = wpad * h * 2;
             k.p = p;
+#if PSYZ_SATURN_TEX_LRU
+            k.use = tex_clock;
+            k.off = start - 16;
+            tex_keys[slot] = k;
+            tex_nkeys += slot == tex_nkeys;
+#else
             tex_keys[tex_nkeys++] = k;
+#endif
             CS(LIVE)++;
         }
     }
