@@ -116,12 +116,15 @@ static uint16_t* tex_arena; // VDP1 VRAM: start of libyaul's texture partition
 #if !PSYZ_SATURN_TEX_LRU
 static unsigned tex_arena_used;    // bytes, reset by the drop-all eviction
 static unsigned tex_evict_pending; // drop-all deferred to the end of commit
+static unsigned tex_half;          // byte base of the half being filled
+static unsigned tex_plot_half; // byte base of the half the plotted list reads
 #endif
 #define TEX_CACHE_BYTES 262144
 static unsigned tex_nkeys; // slots used, dead ones included
 #if PSYZ_SATURN_TEX_LRU
 static unsigned tex_clock; // +1 per lookup; a hit or an insert stamps the key
-static unsigned tex_pin;   // tex_clock at the end of the last commit
+static unsigned tex_pin;   // tex_clock at the end of the commit before last
+static unsigned tex_pin_next; // tex_clock at the end of the last commit
 static unsigned tex_gap(unsigned need, unsigned* big, unsigned* sum);
 #else
 static void tex_drop(int refusal);
@@ -827,21 +830,23 @@ static void commit(void) {
 #if PSYZ_SATURN_TEX_LRU
     {
         unsigned big, sum;
-        tex_pin = tex_clock; // no command references the arena any more
+        tex_pin = tex_pin_next; // the plotted list still reads its keys
+        tex_pin_next = tex_clock;
         tex_gap(TEX_CACHE_BYTES, &big, &sum);
         TS(FREE_LARGEST) = big;
     }
 #else
-    if (tex_evict_pending) { // no command references the arena any more
+    tex_plot_half = tex_half; // the plotted list reads only this half
+    if (tex_evict_pending) {
         tex_drop(1);
     }
-    // half-mark drop-all keeps a list of <= 32 new keys / 128 KiB
+    // half-mark drop-all keeps a list of <= 32 new keys / 64 KiB
     // from filling mid-list; dead-slot reuse or LRU if the hit rate needs it
-    if (tex_nkeys > MAXPOLY / 2 || tex_arena_used > TEX_CACHE_BYTES / 2) {
+    if (tex_nkeys > MAXPOLY / 2 || tex_arena_used > TEX_CACHE_BYTES / 4) {
         tex_drop(0);
     }
     TS(FREE_LARGEST) =
-        TEX_CACHE_BYTES + 16 - ((tex_arena_used + 2 + 15) & ~15u);
+        TEX_CACHE_BYTES / 2 + 16 - ((tex_arena_used + 2 + 15) & ~15u);
 #endif
     t = tick();
     CS(FRAME_TICKS) += t - frame_start;
@@ -1302,6 +1307,7 @@ static void tex_drop(int refusal) {
     tex_nkeys = 0;
     tex_arena_used = 0;
     tex_evict_pending = 0;
+    tex_half ^= tex_half == tex_plot_half ? TEX_CACHE_BYTES / 2 : 0;
     CS(EVICTIONS)++;
     CS(LIVE) = 0;
 }
@@ -1427,7 +1433,14 @@ static void sprite(int x, int y, unsigned w, unsigned h, unsigned w2) {
         start += 16;
 #else
         start = (tex_arena_used + 2 + 15) & ~15u;
-        if (tex_nkeys >= MAXPOLY || start + wpad * h * 2 > TEX_CACHE_BYTES) {
+        if (16 + wpad * h * 2 > TEX_CACHE_BYTES / 2) {
+            CS(FULL)++;
+            TS(REFUSALS)++;
+            unsupported++;
+            return;
+        }
+        if (tex_nkeys >= MAXPOLY ||
+            start + wpad * h * 2 > TEX_CACHE_BYTES / 2) {
             if (npoly) { // pending commands read the arena: drop at commit
                 CS(FULL)++;
                 TS(REFUSALS)++;
@@ -1442,6 +1455,7 @@ static void sprite(int x, int y, unsigned w, unsigned h, unsigned w2) {
             tex_drop(0);
             start = 16;
         }
+        start += tex_half;
 #endif
         p = tex_arena + start / 2;
         p[-1] = 0x0000; // guard
@@ -1469,7 +1483,7 @@ static void sprite(int x, int y, unsigned w, unsigned h, unsigned w2) {
             CS(ARENA_HIGH) = start + wpad * h * 2;
         }
 #else
-        tex_arena_used = start + wpad * h * 2;
+        tex_arena_used = start - tex_half + wpad * h * 2;
         if (tex_arena_used > CS(ARENA_HIGH)) {
             CS(ARENA_HIGH) = tex_arena_used;
         }
