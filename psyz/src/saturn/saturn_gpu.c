@@ -746,10 +746,10 @@ static void fb_copy(void) {
     if (!n) {
         return;
     }
-    v0 = vdp2_tvmd_vcount_get();
+    v0 = saturn_frame_vcount();
     while (!vdp1_transfer_status_get().cef) {
         FB(POLLS)++;
-        v = vdp2_tvmd_vcount_get();
+        v = saturn_frame_vcount();
         if (v < v0) {
             FB(TORN)++;
             return;
