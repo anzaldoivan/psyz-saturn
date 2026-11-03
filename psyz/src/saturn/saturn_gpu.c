@@ -611,7 +611,9 @@ static void dcpu_flush(void) {
         dcpu_add(0, DC_TICKS_A, tk - t0);
         cpu_dual_slave_notify();
         dcpu_own(0, first, gen);
-        while (!(icf = DCPU_ICF_TAKE()) && tick() - tk < DCPU_JOIN_BOUND) {
+        // drop a stale ICF from a slave late past an earlier timeout
+        while (!(icf = DCPU_ICF_TAKE() && dcpu_rd16(&R->h.gen) == gen) &&
+               tick() - tk < DCPU_JOIN_BOUND) {
             iters++;
         }
         dcpu_add(0, DC_WAIT_ITERS, iters);
