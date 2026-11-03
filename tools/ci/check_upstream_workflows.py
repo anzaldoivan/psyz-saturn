@@ -9,7 +9,8 @@ import urllib.request
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DIR = ROOT / ".github/workflows"
 UP = "https://api.github.com/repos/Xeeynamo/psyz"
-FORK_ONLY = {"upstream-parity.yaml"}
+# Explicitly approved fork-only workflows; retain upstream byte parity for all others.
+FORK_ONLY = {"upstream-parity.yaml", "mister-hil-contract.yml"}
 
 
 def blob_sha(data):
