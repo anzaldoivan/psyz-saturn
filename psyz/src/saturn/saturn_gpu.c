@@ -78,6 +78,25 @@ enum {
 volatile unsigned psyz_tex_stats[TS_COUNT];
 #define TS(i) psyz_tex_stats[TS_##i]
 
+#ifndef PSYZ_SATURN_FB_FEEDBACK
+#define PSYZ_SATURN_FB_FEEDBACK 0 // 1: drawn rects copied back to the shadow
+#endif
+#if PSYZ_SATURN_FB_FEEDBACK
+// framebuffer feedback counters, read from a save state by the host
+enum {
+    FB_POLICY, // PSYZ_SATURN_FB_FEEDBACK as built
+    FB_RECTS,  // rects copied
+    FB_BYTES,
+    FB_POLLS,       // CEF reads that found the plot unfinished
+    FB_TORN,        // plot outlived the field
+    FB_UNSUPPORTED, // lists not copied: unsupported, stp texel, area, mask
+    FB_PENDING,     // StoreImage/MoveImage source meets an unplotted rect
+    FB_MOVE_IN,     // MoveImage into the drawn frame (not drawn)
+};
+volatile unsigned psyz_fb_stats[8];
+#define FB(i) psyz_fb_stats[FB_##i]
+#endif
+
 // FRT ticks extended past 16 bits; sampled often enough that no delta wraps
 static uint32_t frt_ext;
 static uint16_t frt_last;
@@ -120,6 +139,13 @@ static void fail(const char* fn) {
 #define SHADOW_R8(a) (*(volatile uint8_t*)(uintptr_t)(a))
 #define SHADOW_R16(a) (*(volatile uint16_t*)(uintptr_t)(a))
 #define SHADOW_W16(a, v) (*(volatile uint16_t*)(uintptr_t)(a) = (uint16_t)(v))
+#endif
+#if PSYZ_SATURN_FB_FEEDBACK
+// VDP1 draw framebuffer, 16 bpp, stride 512 halfwords
+#ifndef FB_R16
+#define FB_R16(a) (*(volatile uint16_t*)(uintptr_t)(a))
+#endif
+#define FB_AD(x, y) VDP1_FB(((y) << 9 | (x)) << 1)
 #endif
 #define SHADOW_BASE 0x22400000UL
 #define SHADOW_AD(x, y)                                                        \
@@ -623,6 +649,9 @@ static void ensure_init(void) {
     }
     CS(WRAM_BYTES) = wram_bytes();
     TS(POLICY) = PSYZ_SATURN_TEX_LRU;
+#if PSYZ_SATURN_FB_FEEDBACK
+    FB(POLICY) = PSYZ_SATURN_FB_FEEDBACK;
+#endif
     vdp1_vram_partitions_get(&vp);
     tex_arena = vp.texture_base;
     vdp1_env_default_init(&env);
@@ -663,10 +692,109 @@ static void poly(unsigned w0, const int16_vec2_t* v) {
     vdp1_cmdt_vtx_set(c, v);
 }
 
+#if PSYZ_SATURN_FB_FEEDBACK
+// rects of the open list whose every pixel the list writes exactly (tiles,
+// hole-free sprites), before the local offset and the clip
+static RECT fb_rect[MAXPOLY];
+static unsigned fb_n;
+static int fb_void;          // the open list has a bit-15 texel
+static int fb_area, fb_mask; // draw area off (0,0), mask bits on
+static int fb_hole, fb_stp;  // texel() since the last reset: 0, bit 15
+
+static void fb_note(int x, int y, int w, int h) {
+    if (fb_n < MAXPOLY) {
+        setRECT(&fb_rect[fb_n], x, y, w, h);
+        fb_n++;
+    }
+}
+
+static int fb_meets(
+    int x, int y, int w, int h, int rx, int ry, int rw, int rh) {
+    return x < rx + rw && rx < x + w && y < ry + rh && ry < y + h;
+}
+
+// a read of the shadow the open list would have drawn over on the PS1
+static int fb_pending(int x, int y, int w, int h) {
+    unsigned i;
+    for (i = 0; npoly && i < fb_n; i++) {
+        RECT* r = &fb_rect[i];
+        if (fb_meets(x, y, w, h, r->x + local.x, r->y + local.y, r->w, r->h)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+// after vdp1_sync_wait: once the plot ends (CEF) and before the field ends
+// (the banks change), the rects go from the draw framebuffer to the shadow;
+// RGB writes set bit 15, the PS1 mask bit is 0
+static void fb_copy(void) {
+    unsigned i, n = fb_n;
+    int x, y, x1, y1;
+    uint16_t v0, v;
+    RECT* r;
+    fb_n = 0;
+    if (!shadow) {
+        fb_void = 0;
+        return;
+    }
+    if (unsupported || fb_void || fb_area || fb_mask) {
+        fb_void = 0;
+        FB(UNSUPPORTED)++;
+        return;
+    }
+    if (!n) {
+        return;
+    }
+    v0 = vdp2_tvmd_vcount_get();
+    while (!vdp1_transfer_status_get().cef) {
+        FB(POLLS)++;
+        v = vdp2_tvmd_vcount_get();
+        if (v < v0) {
+            FB(TORN)++;
+            return;
+        }
+        v0 = v;
+    }
+    for (i = 0, r = fb_rect; i < n; i++, r++) {
+        x = r->x + local.x < 0 ? 0 : r->x + local.x;
+        y = r->y + local.y < 0 ? 0 : r->y + local.y;
+        x1 = r->x + local.x + r->w - 1;
+        y1 = r->y + local.y + r->h - 1;
+        x1 = x1 > sysclip.x ? sysclip.x : x1 > 319 ? 319 : x1;
+        y1 = y1 > sysclip.y ? sysclip.y : y1 > 239 ? 239 : y1;
+        setRECT(r, x, y, x1 < x ? 0 : x1 - x + 1, y1 < y ? 0 : y1 - y + 1);
+        for (y = r->y; y < r->y + r->h; y++) {
+            for (x = r->x; x < r->x + r->w; x++) {
+                SHADOW_W16(SHADOW_AD(x, y), FB_R16(FB_AD(x, y)) & 0x7FFF);
+            }
+        }
+        FB(RECTS) += r->w && r->h;
+        FB(BYTES) += r->w * r->h * 2;
+    }
+    if (!vdp1_transfer_status_get().cef) {
+        FB(TORN)++;
+    }
+    for (i = 0, r = fb_rect; i < n; i++, r++) {
+        if (r->w && r->h) {
+            tex_dirty(r->x, r->y, r->w, r->h);
+        }
+    }
+}
+#endif
+
 static void tile(unsigned w0, int x, int y, int w, int h) {
     int16_vec2_t v[4] = {
         {x, y}, {x + w - 1, y}, {x + w - 1, y + h - 1}, {x, y + h - 1}};
+#if PSYZ_SATURN_FB_FEEDBACK
+    unsigned n = npoly;
+#endif
     poly(w0, v);
+#if PSYZ_SATURN_FB_FEEDBACK
+    if (npoly > n) {
+        fb_note(x, y, w, h);
+    }
+#endif
 }
 
 static void commit(void) {
@@ -685,6 +813,9 @@ static void commit(void) {
     vdp1_sync_render();
     vdp1_sync();
     vdp1_sync_wait();
+#if PSYZ_SATURN_FB_FEEDBACK
+    fb_copy();
+#endif
     psyz_saturn_stats[0]++;
 #if PSYZ_SATURN_DCPU
     dcpu_add(cpu_dual_executor_get(), DC_EMITS, 1); // row 1 0: master emits
@@ -909,6 +1040,9 @@ void Draw_SetAreaStart(int x, int y) {
     // system clip is lower-right only, the upper-left stays (0,0)
     (void)x;
     (void)y;
+#if PSYZ_SATURN_FB_FEEDBACK
+    fb_area = x || y;
+#endif
 }
 
 void Draw_SetAreaEnd(int x, int y) {
@@ -925,6 +1059,9 @@ void Draw_SetMask(int bit0, int bit1) {
     if (bit0 || bit1) {
         WARNF("mask bits are not applied on Saturn");
     }
+#if PSYZ_SATURN_FB_FEEDBACK
+    fb_mask = bit0 || bit1;
+#endif
 }
 
 void Draw_ClearImage(RECT* rect, u_char r, u_char g, u_char b) {
@@ -999,6 +1136,11 @@ void Draw_StoreImage(RECT* rect, u_long* p) {
         rect->y + h > 0) {
         psyz_saturn_stats[11]++;
     }
+#if PSYZ_SATURN_FB_FEEDBACK
+    if (fb_pending(rect->x, rect->y, w, h)) {
+        FB(PENDING)++;
+    }
+#endif
     for (j = 0; j < h; j++) {
         for (i = 0; i < w; i++) {
             d[j * w + i] = SHADOW_R16(SHADOW_AD(rect->x + i, rect->y + j));
@@ -1022,6 +1164,14 @@ void Draw_MoveImage(RECT* rect, unsigned int x, unsigned int y) {
     }
     w = ((w - 1) & 0x3FF) + 1;
     h = ((h - 1) & 0x1FF) + 1;
+#if PSYZ_SATURN_FB_FEEDBACK
+    if (fb_pending(rect->x, rect->y, w, h)) {
+        FB(PENDING)++;
+    }
+    if (fb_meets(x, y, w, h, 0, 0, 320, 240)) {
+        FB(MOVE_IN)++;
+    }
+#endif
     tex_dirty(x, y, w, h);
     for (j = 0; j < h; j++) {
         for (c = 0; c < w; c += 128) {
@@ -1041,6 +1191,10 @@ void Draw_ResetBuffer(void) {
     unsupported = 0;
 #if PSYZ_SATURN_DCPU
     ndesc = 0;
+#endif
+#if PSYZ_SATURN_FB_FEEDBACK
+    fb_n = 0;
+    fb_void = 0;
 #endif
     frame_start = tick();
 }
@@ -1073,6 +1227,9 @@ static struct TexKey {
 #if PSYZ_SATURN_TEX_LRU
     unsigned use; // tex_clock at the last hit or insert
     unsigned off; // block start: 16 bytes, guard at off + 14, then n bytes
+#endif
+#if PSYZ_SATURN_FB_FEEDBACK
+    int hole, stp; // a drawn texel is 0, has bit 15
 #endif
     uint16_t* p;
 } tex_keys[MAXPOLY];
@@ -1179,6 +1336,10 @@ static uint16_t texel(unsigned clut, unsigned u, unsigned v) {
     } else {
         t = tex_hw(px + u, py + v);
     }
+#if PSYZ_SATURN_FB_FEEDBACK
+    fb_hole |= !t;
+    fb_stp |= t >> 15;
+#endif
     return t ? 0x8000 | (t & 0x7FFF) : 0x0000;
 }
 
@@ -1189,6 +1350,9 @@ static void sprite(int x, int y, unsigned w, unsigned h, unsigned w2) {
     uint16_t* p = NULL;
     vdp1_cmdt_t* c;
     vdp1_cmdt_draw_mode_t dm = {.raw = 0};
+#if PSYZ_SATURN_FB_FEEDBACK
+    int hole = 0, stp = 0;
+#endif
     if (npoly >= MAXPOLY || texpage.tpf > 2 || wpad < 8 || wpad > 504 ||
         h < 1 || h > 255) {
         unsupported++;
@@ -1206,6 +1370,10 @@ static void sprite(int x, int y, unsigned w, unsigned h, unsigned w2) {
             p = k->p;
 #if PSYZ_SATURN_TEX_LRU
             k->use = tex_clock;
+#endif
+#if PSYZ_SATURN_FB_FEEDBACK
+            hole = k->hole;
+            stp = k->stp;
 #endif
         }
     }
@@ -1278,6 +1446,9 @@ static void sprite(int x, int y, unsigned w, unsigned h, unsigned w2) {
         p = tex_arena + start / 2;
         p[-1] = 0x0000; // guard
         t0 = t = tick();
+#if PSYZ_SATURN_FB_FEEDBACK
+        fb_hole = fb_stp = 0;
+#endif
         for (j = 0; j < h; j++) {
             for (i = 0; i < wpad; i++) {
                 p[j * wpad + i] =
@@ -1326,6 +1497,10 @@ static void sprite(int x, int y, unsigned w, unsigned h, unsigned w2) {
             k.cw = texpage.tpf == 2 ? 0 : texpage.tpf ? 256 : 16;
             k.n = wpad * h * 2;
             k.p = p;
+#if PSYZ_SATURN_FB_FEEDBACK
+            k.hole = hole = fb_hole;
+            k.stp = stp = fb_stp;
+#endif
 #if PSYZ_SATURN_TEX_LRU
             k.use = tex_clock;
             k.off = start - 16;
@@ -1346,6 +1521,12 @@ static void sprite(int x, int y, unsigned w, unsigned h, unsigned w2) {
     vdp1_cmdt_char_size_set(c, wpad, h);
     c->cmd_xa = x;
     c->cmd_ya = y;
+#if PSYZ_SATURN_FB_FEEDBACK
+    fb_void |= stp;
+    if (!hole) {
+        fb_note(x, y, w, h);
+    }
+#endif
 }
 
 int Draw_PushPrim(u_long* packets, int max_len) {
