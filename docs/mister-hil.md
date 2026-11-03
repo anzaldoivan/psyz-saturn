@@ -2,7 +2,7 @@
 
 Status: **opt-in evidence capture; no Saturn guest test assertion**.
 
-The independent runner \`tools/mister_hil.py\` accepts an already-built CUE/BIN image,
+The independent runner `tools/mister_hil.py` accepts an already-built CUE/BIN image,
 copies it to MiSTer by SSH/SCP, launches it with the Zaparoo Core JSON-RPC API,
 optionally injects controller input and saves a PNG and JSON report.
 
@@ -14,9 +14,9 @@ independent proof of hardware timing.
 
 - A MiSTer FPGA with a Saturn core, compatible BIOS and sufficient storage.
 - Zaparoo Core installed and reachable at port 7497 on a trusted LAN/VPN.
-- SSH public-key access for \`root@<mister-host>\` and a pinned SSH host key.
-- A homebrew Saturn disc image in one folder, with a UTF-8 \`.cue\` file that
-  refers to same-directory files using \`FILE "<name>.bin" BINARY\`.
+- SSH public-key access for `root@<mister-host>` and a pinned SSH host key.
+- A homebrew Saturn disc image in one folder, with a UTF-8 `.cue` file that
+  refers to same-directory files using `FILE "<name>.bin" BINARY`.
 - A PC with Python 3.10+, SSH and SCP.
 
 Never upload proprietary game assets, BIOS files or disc images into GitHub CI.
@@ -27,7 +27,7 @@ artifact. The runner does not include a Saturn compiler or a disc packager.
 
 From the repository root:
 
-\`\`\`bash
+```bash
 python3 -m unittest discover -s tools/tests -p 'test_mister_hil.py' -v
 
 # Network/HIL exercise: run this on a trusted PC, not on public PR runners.
@@ -38,16 +38,16 @@ python3 tools/mister_hil.py \
   --buttons '{start}' \
   --settle 5 \
   --output build/mister-hil
-\`\`\`
+```
 
-The runner writes \`build/mister-hil/screenshot.png\` and
-\`build/mister-hil/report.json\`. Its success status is
-\`"evidence_only"\`, and \`"guest_result": "not_asserted"\`. It **never**
+The runner writes `build/mister-hil/screenshot.png` and
+`build/mister-hil/report.json`. Its success status is
+`"evidence_only"`, and `"guest_result": "not_asserted"`. It **never**
 labels the Saturn application as PASS based merely on a launch or screenshot.
 An infrastructure failure yields exit code 2 and a JSON error report.
 
-You may set \`--zaparoo-url http://<private-address>:7497\` and supply a
-Zaparoo static API key through \`ZAPAROO_API_KEY\` (Bearer header).
+You may set `--zaparoo-url http://<private-address>:7497` and supply a
+Zaparoo static API key through `ZAPAROO_API_KEY` (Bearer header).
 Use an isolated network or SSH tunnel, as HTTP is not encrypted.
 Some newer Zaparoo configurations use paired/encrypted clients instead:
 this minimal HTTP client does not implement the pairing protocol.
@@ -57,14 +57,14 @@ this minimal HTTP client does not implement the pairing protocol.
 1. CUE file parses to same-directory, existing, non-symlinked track files.
 2. Remote host and run directory are restricted to safe identifiers.
 3. SSH with strict host-key checking creates a dedicated directory under
-   \`/media/fat/games/Saturn/PsyZHIL/<run-id>\`.
+   `/media/fat/games/Saturn/PsyZHIL/<run-id>`.
 4. SCP transfers the CUE and its referenced tracks.
-5. Zaparoo \`version\` returns a valid JSON-RPC response.
-6. Zaparoo \`run\` accepts \`**launch:<remote-cue-path>\`.
-7. Zaparoo \`media.active\` reports a Saturn system ID.
-8. Optional \`input.gamepad\` macro reaches Zaparoo (not guaranteed to be mapped
+5. Zaparoo `version` returns a valid JSON-RPC response.
+6. Zaparoo `run` accepts `**launch:<remote-cue-path>`.
+7. Zaparoo `media.active` reports a Saturn system ID.
+8. Optional `input.gamepad` macro reaches Zaparoo (not guaranteed to be mapped
    to controller 1 inside the Saturn core).
-9. Zaparoo \`screenshot\` returns a PNG-like image, which is saved and hashed.
+9. Zaparoo `screenshot` returns a PNG-like image, which is saved and hashed.
 
 For the next phase, a guest-authored **machine-readable test result** is
 essential. Prefer a minimal display protocol with fixed geometry and known
@@ -76,7 +76,7 @@ and allow core-specific tolerances.
 
 ## Security and CI integration
 
-The contract workflow \`.github/workflows/mister-hil-contract.yml\` runs
+The contract workflow `.github/workflows/mister-hil-contract.yml` runs
 only Python unit tests with no hardware access, no privileged secrets and
 read-only repository permissions.
 
@@ -108,7 +108,7 @@ required before making this unattended.
 ## Prior art
 
 - Zaparoo Core API: https://zaparoo.org/docs/core/api/
-- Zaparoo methods (\`run\`, \`media.active\`, \`input.gamepad\`, \`screenshot\`):
+- Zaparoo methods (`run`, `media.active`, `input.gamepad`, `screenshot`):
   https://zaparoo.org/docs/core/api/methods/
 - Zaparoo launch syntax: https://zaparoo.org/docs/zapscript/launch/
 - Zaparoo virtual input mapping: https://zaparoo.org/docs/zapscript/input/
