@@ -1,0 +1,22 @@
+name: MiSTer HIL contract tests
+
+on:
+  pull_request:
+    paths:
+      - tools/mister_hil.py
+      - tools/tests/test_mister_hil.py
+      - docs/mister-hil.md
+      - .github/workflows/mister-hil-contract.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate HIL host-side contracts (no FPGA access)
+        run: python3 -m unittest discover -s tools/tests -p 'test_mister_hil.py' -v
