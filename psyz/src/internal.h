@@ -47,6 +47,12 @@ void Psyz_KernelPoll(void);
 // Latch completion of a native DMA transfer through the kernel IRQ dispatcher.
 void Psyz_KernelDmaComplete(int channel);
 
+// Latches the CD-ROM interrupt, as the drive does once per sector it reads.
+void Psyz_KernelCdInterrupt(void);
+
+// Advances the CD drive by one vertical blank's worth of sectors.
+void Psyz_CdVBlank(void);
+
 // FASYNC implementation for memory cards
 int open_card_fd(int fd, const char* devname, int flag);
 void close_card_fd(int fd);

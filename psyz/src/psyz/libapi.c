@@ -68,6 +68,7 @@ int VSync(int mode) {
     }
     ReadPadsOnVsync(); // this is done on vsync by the BIOS
     for (; n > 0; n--) {
+        Psyz_CdVBlank();
         Psyz_KernelVBlank();
     }
     return elapsed;

@@ -277,6 +277,8 @@ void Psyz_KernelDmaComplete(int channel) {
     KernelUnlock();
 }
 
+void Psyz_KernelCdInterrupt(void) { LatchLine(IRQ_CDROM); }
+
 void* DMACallback(int channel, void (*callback)()) {
     void (*previous)(void);
     if (channel < 0 || channel >= LEN(dma_callbacks)) {
