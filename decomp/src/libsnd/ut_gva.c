@@ -19,10 +19,10 @@ short SsUtGetVagAtr(short vabId, short prog, short toneNum, VagAtr* vagatrptr) {
         vagatrptr->porT = _svm_tn[temp_v1].porT;
         vagatrptr->pbmin = _svm_tn[temp_v1].pbmin;
         vagatrptr->pbmax = _svm_tn[temp_v1].pbmax;
-        vagatrptr->adsr1 = _svm_tn[temp_v1].adsr1;
-        vagatrptr->adsr2 = _svm_tn[temp_v1].adsr2;
-        vagatrptr->prog = _svm_tn[temp_v1].prog;
-        vagatrptr->vag = _svm_tn[temp_v1].vag;
+        vagatrptr->adsr1 = le16((u8*)&_svm_tn[temp_v1].adsr1);
+        vagatrptr->adsr2 = le16((u8*)&_svm_tn[temp_v1].adsr2);
+        vagatrptr->prog = le16((u8*)&_svm_tn[temp_v1].prog);
+        vagatrptr->vag = le16((u8*)&_svm_tn[temp_v1].vag);
         return 0;
     }
     return -1;

@@ -20,6 +20,8 @@ short SsVabOpenHeadWithMode(
     int vagLens[256];
     int i;
     int size;
+    int ver;
+    u16 ps;
     short vab_id;
     unsigned short vag_header_len;
     unsigned short* ptr_vag_off_table;
@@ -68,7 +70,9 @@ short SsVabOpenHeadWithMode(
     _svm_vab_vh[vab_id] = (VabHdr*)ptr;
     ptr += sizeof(VabHdr);
     vab_header = (VabHdr*)addr;
-    magic = vab_header->form;
+    magic = le32((u8*)&vab_header->form);
+    ver = le32((u8*)&vab_header->ver);
+    ps = le16((u8*)&vab_header->ps);
     if ((magic >> 8) != ('V' << 0x10 | 'A' << 0x8 | 'B')) {
         _svm_vab_used[vab_id] = 0;
         _spu_setInTransfer(0);
@@ -76,7 +80,7 @@ short SsVabOpenHeadWithMode(
         return -1;
     }
     if ((magic & 0xFF) == 'p') {
-        if (vab_header->ver >= 5) {
+        if (ver >= 5) {
             kMaxPrograms = 0x80;
         } else {
             kMaxPrograms = 0x40;
@@ -84,7 +88,7 @@ short SsVabOpenHeadWithMode(
     } else {
         kMaxPrograms = 0x40;
     }
-    if (vab_header->ps > kMaxPrograms) {
+    if (ps > kMaxPrograms) {
         _svm_vab_used[vab_id] = 0;
         _spu_setInTransfer(0);
         _svm_vab_count--;
@@ -103,12 +107,12 @@ short SsVabOpenHeadWithMode(
     }
     size = 0;
     _svm_vab_tn[vab_id] = (VagAtr*)ptr;
-    ptr_vag_off_table = (u16*)(ptr + vab_header->ps * 512);
-    num_vags = vab_header->vs;
+    ptr_vag_off_table = (u16*)(ptr + ps * 512);
+    num_vags = le16((u8*)&vab_header->vs);
     for (i = 0; i < LEN(vagLens); i++) {
         if (num_vags >= i) {
-            vag_header_len = *ptr_vag_off_table;
-            if (vab_header->ver >= 5) {
+            vag_header_len = le16((u8*)ptr_vag_off_table);
+            if (ver >= 5) {
                 vagLens[i] = vag_header_len * 8;
             } else {
                 vagLens[i] = vag_header_len * 4;
