@@ -428,6 +428,7 @@ ZTEST(native, invalid_arguments_are_rejected) {
 ZTEST(native, resolution_survives_reset_graph) {
     zassert_s32_eq(0, Psyz_VideoSetResolution((PsyzSize){400, 240}));
     ResetGraph(0);
+    PutDispEnv(&db[0].disp); // the reset display mode is 256 wide
     zexpect_s32_eq(360, Psyz_VideoGetDrawArea().ex);
     zexpect_s32_eq(-40, Psyz_VideoGetDrawArea().sx);
 }

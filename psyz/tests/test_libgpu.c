@@ -7,6 +7,7 @@
 #include <libgpu.h>
 
 #include "ztest.h"
+#include "../src/video_private.h"
 
 #include "res/4bpp.h"
 #include "res/16bpp.h"
@@ -650,6 +651,84 @@ ZTEST(gpu, disp_mask_preserves_vram) {
     DrawSync(0);
     zprintf("VRAM must survive the display being re-enabled\n");
     zexpect_u8array_eq(pattern, readback, sizeof(pattern));
+}
+
+ZTEST(gpu, reset_graph_restores_reset_state) {
+    u_short texels[4] = {0x3210, 0x7654, 0xBA98, 0xFEDC};
+    u_short clut[16];
+    u_short readback[16];
+    RECT tex_rect = {0, 248, 4, 1};
+    RECT clut_rect = {0, 480, 16, 1};
+    RECT twin_rect = {0, 0, 8, 8};
+    RECT area = {512, 256, 64, 16};
+    RECT read_rect = {512, 256, 16, 1};
+    DRAWENV draw;
+    DISPENV disp;
+    DR_TPAGE tpage;
+    DR_TWIN twin;
+    DR_STP stp;
+    DR_AREA dr_area;
+    SPRT sprt;
+    PsyzVideoCaptureState state;
+
+    for (int i = 0; i < 16; i++) {
+        clut[i] = (u_short)(i * 0x421 + 1);
+    }
+    LoadImage(&tex_rect, (u_long*)texels);
+    LoadImage(&clut_rect, (u_long*)clut);
+    SetDefDispEnv(&disp, 256, 0, 320, 240);
+    PutDispEnv(&disp);
+    SetDispMask(1);
+    SetDefDrawEnv(&draw, 320, 240, 128, 128);
+    PutDrawEnv(&draw);
+    SetDrawTPage(&tpage, 0, 0, getTPage(2, 1, 640, 256));
+    SetTexWindow(&twin, &twin_rect);
+    setlen(&stp, 2);
+    stp.code[0] = 0xE6000003; // set and check mask bit
+    stp.code[1] = 0;
+    AddPrim(cdb->ot, &stp);
+    AddPrim(cdb->ot, &twin);
+    AddPrim(cdb->ot, &tpage);
+    DrawOTag(cdb->ot);
+    DrawSync(0);
+
+    ResetGraph(0);
+    zassert_s32_eq(0, Psyz_VideoGetCaptureState(&state));
+    zprintf("GP1(00h) masks the display and shows 256x240 at 0,0\n");
+    zexpect_s32_eq(0, state.display_enabled);
+    zexpect_s32_eq(0, state.display_x);
+    zexpect_s32_eq(0, state.display_y);
+    zexpect_s32_eq(256, state.display_w);
+    zexpect_s32_eq(240, state.display_h);
+    zprintf("GP1(00h) sets the drawing area to 0,0 0,0\n");
+    zexpect_s32_eq(0, state.draw_x);
+    zexpect_s32_eq(0, state.draw_y);
+    zexpect_s32_eq(1, state.draw_w);
+    zexpect_s32_eq(1, state.draw_h);
+
+    // only E3/E4 change: the sprite sees offset, texpage, window and mask
+    ClearOTagR(cdb->ot, OTSIZE);
+    SetDrawArea(&dr_area, &area);
+    setSprt(&sprt);
+    setShadeTex(&sprt, 1);
+    setSemiTrans(&sprt, 0);
+    setXY0(&sprt, 512, 256);
+    setUV0(&sprt, 0, 248);
+    setWH(&sprt, 16, 1);
+    sprt.clut = getClut(0, 480);
+    AddPrim(cdb->ot, &sprt);
+    AddPrim(cdb->ot, &dr_area);
+    DrawOTag(cdb->ot);
+    DrawSync(0);
+    memset(readback, 0, sizeof(readback));
+    StoreImage(&read_rect, (u_long*)readback);
+    DrawSync(0);
+    // the host renderer sets bit 15 on textured writes, compare the colour
+    for (int i = 0; i < 16; i++) {
+        readback[i] &= 0x7FFF;
+    }
+    zprintf("offset 0, texpage 0 and window 0 after reset\n");
+    zexpect_u8array_eq(clut, readback, sizeof(clut));
 }
 
 ZTEST(gpu, blit) {
@@ -1838,4 +1917,42 @@ ZTEST(gpu, vsync_callbacks_run_in_channel_order) {
     zexpect_s32_eq(0, vsync_order[0]);
     zexpect_s32_eq(3, vsync_order[1]);
     zexpect_s32_eq(7, vsync_order[2]);
+}
+
+static volatile int draw_sync_hits;
+static void FirstDrawSync(void) { draw_sync_hits++; }
+static void OtherDrawSync(void) { draw_sync_hits--; }
+
+ZTEST_SETUP(gpu_sys) {
+    ResetGraph(0);
+    DrawSyncCallback(NULL);
+}
+ZTEST_TEARDOWN(gpu_sys) { DrawSyncCallback(NULL); }
+
+ZTEST(gpu_sys, draw_sync_callback_returns_previous) {
+    zexpect_uintptr_eq(0, DrawSyncCallback(FirstDrawSync));
+    zexpect_uintptr_eq(FirstDrawSync, DrawSyncCallback(OtherDrawSync));
+    zexpect_uintptr_eq(OtherDrawSync, DrawSyncCallback(NULL));
+    zexpect_uintptr_eq(0, DrawSyncCallback(NULL));
+}
+
+// GP0(E5h): x in bits 0-10, y in bits 11-21, both signed; the 2 MiB VRAM
+// GPUs (GetGraphType 1 and 2) take 12 bits each
+static u_long DrawOffsetWord(int x, int y) {
+    if (GetGraphType() == 1 || GetGraphType() == 2) {
+        return 0xE5000000 | ((y & 0xFFF) << 12) | (x & 0xFFF);
+    }
+    return 0xE5000000 | ((y & 0x7FF) << 11) | (x & 0x7FF);
+}
+
+ZTEST(gpu_sys, set_draw_offset) {
+    DR_OFFSET p;
+    u_short ofs[2] = {100, 200};
+    u_short neg[2] = {(u_short)-16, (u_short)-1};
+    SetDrawOffset(&p, ofs);
+    zexpect_u8_eq(2, getlen(&p));
+    zexpect_u32_eq(DrawOffsetWord(100, 200), p.code[0]);
+    zexpect_u32_eq(0, p.code[1]);
+    SetDrawOffset(&p, neg);
+    zexpect_u32_eq(DrawOffsetWord(-16, -1), p.code[0]);
 }
