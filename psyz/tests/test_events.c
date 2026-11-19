@@ -121,6 +121,8 @@ ZTEST_TEARDOWN(events) {
         ev_close(ev_opened[0]);
     }
 #if !defined(__psx__) && !defined(__PSP__)
+    Psyz_CardSetPresent(CARD_SLOT_1, 1);
+    Psyz_CardSetPresent(CARD_SLOT_2, 1);
     Psyz_VideoSetVsyncMode(saved_vsync_mode);
 #endif
 }
@@ -1054,3 +1056,126 @@ ZTEST(events, card_async_io_raises_sw_card_ioe) {
     zexpect_s32_eq(CARD_IOE, write_status);
     zexpect_s32_eq(CARD_IOE, read_status);
 }
+
+#if !defined(__psx__) && !defined(__PSP__)
+ZTEST(events, card_removed_raises_timeout) {
+    Psyz_CardSetPresent(CARD_SLOT_1, 0);
+    card_start();
+    zexpect_s32_eq(CARD_TIMOUT, card_info(CARD_SLOT_1));
+    zexpect_s32_eq(CARD_TIMOUT, card_poll(card_hw, 10));
+    zassert_s32_eq(1, _card_load(CARD_SLOT_1));
+    zexpect_s32_eq(CARD_TIMOUT, card_poll(card_sw, 180));
+    card_poll(card_hw, 0);
+    zassert_s32_eq(1, _card_clear(CARD_SLOT_1));
+    zexpect_s32_eq(CARD_TIMOUT, card_poll(card_hw, 180));
+    zexpect_s32_eq(-1, card_poll(card_sw, 10));
+}
+
+static long probe_ev[7];
+
+static void card_probe_start(void) {
+    static const unsigned long descs[] = {
+        SwCARD, SwCARD, SwCARD, SwCARD, HwCARD, HwCARD, HwCARD};
+    static const long specs[] = {EvSpIOE, EvSpTIMOUT, EvSpNEW,  EvSpERROR,
+                                 EvSpIOE, EvSpTIMOUT, EvSpERROR};
+    InitCARD(0);
+    StartCARD();
+    _bu_init();
+    card_started = 1;
+    EnterCriticalSection();
+    for (int i = 0; i < 7; i++) {
+        probe_ev[i] = OpenEvent(descs[i], specs[i], EvMdNOINTR, NULL);
+        ev_opened[ev_opened_len++] = probe_ev[i];
+    }
+    ExitCriticalSection();
+    for (int i = 0; i < 7; i++) {
+        zassert_s32_ne(-1, probe_ev[i]);
+        EnableEvent(probe_ev[i]);
+    }
+}
+
+static int card_probe_wait(const long* events, int len) {
+    for (int max_vblanks = 180;; max_vblanks--) {
+        for (int i = 0; i < len; i++) {
+            if (TestEvent(events[i])) {
+                return i;
+            }
+        }
+        if (max_vblanks <= 0) {
+            return 3;
+        }
+        VSync(0);
+    }
+}
+
+static int card_probe_info(long chan) {
+    int ret = 3;
+    int prev = 0xFF;
+    int tries = 3;
+    for (int i = 0; i < 4; i++) {
+        TestEvent(probe_ev[i]);
+    }
+    do {
+        if (_card_info(chan)) {
+            ret = card_probe_wait(probe_ev, 4);
+            if (!(ret & 1) && ret == prev) {
+                break;
+            }
+            prev = ret;
+        }
+    } while (--tries);
+    return ret;
+}
+
+static int card_probe_load(long chan) {
+    int ret = 3;
+    int tries = 3;
+    for (int i = 0; i < 4; i++) {
+        TestEvent(probe_ev[i]);
+    }
+    do {
+        if (_card_load(chan)) {
+            ret = card_probe_wait(probe_ev, 4);
+            if (ret == 0) {
+                break;
+            }
+        }
+    } while (--tries);
+    return ret;
+}
+
+static int card_probe_clear(long chan) {
+    int ret = 2;
+    int tries = 10;
+    for (int i = 4; i < 7; i++) {
+        TestEvent(probe_ev[i]);
+    }
+    do {
+        if (_card_clear(chan)) {
+            ret = card_probe_wait(probe_ev + 4, 3);
+            if (ret == 0) {
+                break;
+            }
+        }
+    } while (--tries);
+    return ret;
+}
+
+ZTEST(events, card_probe_sequence_cards_out) {
+    Psyz_CardSetPresent(CARD_SLOT_1, 0);
+    Psyz_CardSetPresent(CARD_SLOT_2, 0);
+    card_probe_start();
+    zexpect_s32_eq(1, card_probe_info(CARD_SLOT_1));
+    zexpect_s32_eq(1, card_probe_load(CARD_SLOT_1));
+    zexpect_s32_eq(1, card_probe_clear(CARD_SLOT_1));
+}
+
+ZTEST(events, card_probe_sequence_card_in) {
+    Psyz_CardSetPresent(CARD_SLOT_1, 1);
+    Psyz_CardSetPresent(CARD_SLOT_2, 0);
+    card_probe_start();
+    zexpect_s32_eq(0, card_probe_info(CARD_SLOT_1));
+    zexpect_s32_eq(0, card_probe_load(CARD_SLOT_1));
+    zexpect_s32_eq(0, card_probe_clear(CARD_SLOT_1));
+}
+#endif

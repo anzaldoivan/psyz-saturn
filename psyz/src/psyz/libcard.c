@@ -35,15 +35,23 @@ long _card_auto(long val) {
 }
 
 static long last_chan;
+static int card_present[2][4] = {{1}, {1}};
 
-// Cards live as host directories and are always plugged in, but there is no
-// multi-tap, so its extra slots time out like an empty port.
+void Psyz_CardSetPresent(long chan, int present) {
+    if (validate_chan(chan)) {
+        card_present[chan >> 4][chan & 15] = present;
+    }
+}
+
+// Cards live as host directories. A slot without a card times out like an
+// empty port; only the first slot of each port starts plugged in.
 static long card_op(unsigned int sw_desc, long chan) {
     if (!validate_chan(chan)) {
         return 0;
     }
     last_chan = chan;
-    unsigned int spec = (chan & 15) ? EvSpTIMOUT : EvSpIOE;
+    unsigned int spec =
+        card_present[chan >> 4][chan & 15] ? EvSpIOE : EvSpTIMOUT;
     if (sw_desc) {
         Psyz_KernelRaise(sw_desc, spec);
     }

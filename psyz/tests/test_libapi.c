@@ -285,3 +285,62 @@ ZTEST(libetc, scratchpad_words) {
     zexpect_u32_eq(0x12345678, base[1]);
     zexpect_u32_eq(0x9ABCDEF0, base[255]);
 }
+
+static u_char pad_rx1[PSYZ_PAD_BUF_LEN];
+static u_char pad_rx2[PSYZ_PAD_BUF_LEN];
+static const char pad_frame1[] = {0x00, 0x41, 0xFF, 0xF7};
+static const char pad_frame2[] = {0x00, 0xFF};
+
+static void PublishPads(void) {
+    Psyz_PadsSet(0, pad_frame1, sizeof(pad_frame1));
+    Psyz_PadsSet(1, pad_frame2, sizeof(pad_frame2));
+}
+
+static void VSyncWithPads(void) {
+    PsyzVSyncCb prev = Psyz_SetVSyncCb(PublishPads);
+    VSync(0);
+    Psyz_SetVSyncCb(prev);
+}
+
+ZTEST(libpad, direct_buffers_fill_on_vsync) {
+    PadInitDirect(pad_rx1, pad_rx2);
+    PadStartCom();
+    VSyncWithPads();
+    zexpect_u8array_eq(pad_frame1, pad_rx1, sizeof(pad_frame1));
+    zexpect_u8array_eq(pad_frame2, pad_rx2, sizeof(pad_frame2));
+    zexpect_s32_eq(0, PadGetState(0x10));
+    zexpect_s32_eq(0, PadInfoMode(0x10, 1, 0));
+}
+
+ZTEST(libpad, digital_pad_ignores_config_probe) {
+    char align[] = {0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFF};
+    VSyncWithPads();
+    zexpect_s32_eq(2, PadGetState(0));
+    zexpect_s32_eq(4, PadInfoMode(0, 1, 0));
+    zexpect_s32_eq(0, PadInfoMode(0, 2, 0));
+    zexpect_s32_eq(0, PadInfoMode(0, 4, 0));
+    zexpect_s32_eq(0, PadSetActAlign(0, align));
+}
+
+ZTEST(libpad, pad_init_sequence_acts_once) {
+    u_char act[2] = {0};
+    char align[] = {0x00, 0x01, 0xFF, 0xFF, 0xFF, 0xFF};
+    int done = 0, acts = 0;
+    for (int i = 0; i < 3; i++) {
+        VSyncWithPads();
+        int w = PadInfoMode(0, 2, 0);
+        int v = PadGetState(0);
+        if (v == 1) {
+            done = 0;
+        }
+        if (!done) {
+            PadSetAct(0, act, 2);
+            acts++;
+            if (v == 2 ||
+                (v == 6 && (w == 4 || w == 7) && PadSetActAlign(0, align))) {
+                done = 1;
+            }
+        }
+    }
+    zexpect_s32_eq(1, acts);
+}
