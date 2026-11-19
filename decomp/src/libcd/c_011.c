@@ -37,6 +37,20 @@ void dma_execute(s32 channel, void* address, u32 blocks, u32 words, u32 control,
 int init_ring_status(s32 start, u32 count);
 void data_ready_callback(void);
 
+#ifndef __psyz
+#define CD_REG_WRITE(reg, value) (*(reg) = (value))
+#define CD_DMA_BUSY() (*D_800B54C0 & 0x01000000)
+#define MDEC_OUT_BUSY() (*D_800B54B0 & 0x01000000)
+#else
+#include <psyz.h>
+volatile u16* HeaderArea__dot__2;
+s32 debug_cause;
+#include "libcd_private.h"
+#define CD_REG_WRITE(reg, value)
+#define CD_DMA_BUSY() 0
+#define MDEC_OUT_BUSY() (Psyz_DmaRead(DMA_CHANNEL_MDEC_OUT, 2) & 0x01000000)
+#endif
+
 void StCdInterrupt(void) {
     volatile s16 subroutine_arg8[4];
     CdlLOC loc;
@@ -51,7 +65,7 @@ void StCdInterrupt(void) {
     if (StFinalSector == 1) {
         return;
     }
-    if ((StRgb24 != 0) && (*D_800B54B0 & 0x01000000)) {
+    if ((StRgb24 != 0) && MDEC_OUT_BUSY()) {
         StCdIntrFlag = 1;
         if (StEmu_Addr != 0) {
             StEmu_Idx++;
@@ -76,13 +90,18 @@ void StCdInterrupt(void) {
         debug_cause = 4;
         return;
     }
-    *D_800B5490 = 0;
-    *D_800B549C = 0;
-    *D_800B5490 = 0;
-    *D_800B549C = 0x80;
-    *D_800B54A0 = 0x20943;
-    *D_800B54A4 = 0x1323;
+    CD_REG_WRITE(D_800B5490, 0);
+    CD_REG_WRITE(D_800B549C, 0);
+    CD_REG_WRITE(D_800B5490, 0);
+    CD_REG_WRITE(D_800B549C, 0x80);
+    CD_REG_WRITE(D_800B54A0, 0x20943);
+    CD_REG_WRITE(D_800B54A4, 0x1323);
     if (StMode == 0) {
+#ifdef __psyz
+        u32 subheader[2];
+        CD_getsector(&loc, 1);
+        CD_getsector(subheader, 2);
+#else
         var_v1 = (u8*)&loc;
         do {
             *var_v1++ = *D_800B5498;
@@ -90,18 +109,20 @@ void StCdInterrupt(void) {
         for (var_v1_2 = 0; var_v1_2 < 8; var_v1_2++) {
             *D_800B5498;
         }
+#endif
     }
     var_t0 = 0x11000000;
     if (StEmu_Addr != 0) {
-        mem2mem(HeaderArea__dot__2, StEmu_Addr + (StEmu_Idx << 0xB), 8, 0);
+        mem2mem((s32*)HeaderArea__dot__2,
+                (s32*)(StEmu_Addr + (StEmu_Idx << 0xB)), 8, 0);
     } else {
         dma_execute(3, HeaderArea__dot__2, 0, 8, var_t0, 0, 0);
     }
-    while (*D_800B54C0 & 0x01000000) {
+    while (CD_DMA_BUSY()) {
     }
     ((StHEADER*)HeaderArea__dot__2)->loc = loc;
-    *D_800B54A0 = 0x20843;
-    *D_800B54A4 = 0x1325;
+    CD_REG_WRITE(D_800B54A0, 0x20843);
+    CD_REG_WRITE(D_800B54A4, 0x1325);
     if ((StSTART_FLAG == 1) && (StStartFrame != 0)) {
         if (StStartFrame != HeaderArea__dot__2[4]) {
             HeaderArea__dot__2[0] = 0;
@@ -177,33 +198,33 @@ void StCdInterrupt(void) {
                 return;
             }
             HeaderArea__dot__2[0] = 1;
-            var_a1 = StRingAddr;
-            var_a0 = HeaderArea__dot__2;
+            var_a1 = (u32*)StRingAddr;
+            var_a0 = (u32*)HeaderArea__dot__2;
             StRingIdx1 = 0;
             for (var_v1_3 = 0; var_v1_3 < 8; var_v1_3++) {
                 *var_a1++ = *var_a0++;
             }
-            HeaderArea__dot__2 = StRingAddr;
+            HeaderArea__dot__2 = (u16*)StRingAddr;
         }
         StRingIdx2 = StRingIdx1;
     }
     debug_cause = 10;
     Stsector_offset++;
-    StRingBase = &StRingAddr[StRingSize] + (StRingIdx1 * 0x3F);
+    StRingBase = (u16*)(&StRingAddr[StRingSize] + (StRingIdx1 * 0x3F));
 
     if (StRgb24 != 0) {
         var_t0 = 0x11000000;
-        *D_800B54A0 = 0x20943;
-        *D_800B54A4 = 0x1323;
+        CD_REG_WRITE(D_800B54A0, 0x20943);
+        CD_REG_WRITE(D_800B54A4, 0x1323);
     } else {
-        *D_800B54A0 = 0x21020843;
+        CD_REG_WRITE(D_800B54A0, 0x21020843);
         var_t0 = 0x11400100;
     }
     if ((HeaderArea__dot__2[3] - 1) == HeaderArea__dot__2[2]) {
         StFinalSector = 1;
         if (StEmu_Addr != 0) {
-            mem2mem(
-                StRingBase, StEmu_Addr + (StEmu_Idx << 0xB) + 0x20, 0x1F8, 1);
+            mem2mem((s32*)StRingBase,
+                    (s32*)(StEmu_Addr + (StEmu_Idx << 0xB) + 0x20), 0x1F8, 1);
             StEmu_Idx++;
         } else {
             dma_execute(3, StRingBase, 0, 0x1F8, var_t0, 1, 0);
@@ -213,14 +234,14 @@ void StCdInterrupt(void) {
         CChannel = StCHANNEL;
     } else {
         if (StEmu_Addr != 0) {
-            mem2mem(
-                StRingBase, StEmu_Addr + (StEmu_Idx << 0xB) + 0x20, 0x1F8, 0);
+            mem2mem((s32*)StRingBase,
+                    (s32*)(StEmu_Addr + (StEmu_Idx << 0xB) + 0x20), 0x1F8, 0);
             StEmu_Idx++;
         } else {
             dma_execute(3, StRingBase, 0, 0x1F8, var_t0, 0, 0);
         }
     }
-    *D_800B54A4 = 0x1325;
+    CD_REG_WRITE(D_800B54A4, 0x1325);
     HeaderArea__dot__2[0] = 3;
     StRingIdx1 += 1;
     if ((StEmu_Addr != 0) && (StFinalSector != 0)) {
@@ -235,6 +256,7 @@ void mem2mem(s32* dst, s32* src, u32 num, u32 arg3) {
     }
 }
 
+#ifndef __psyz
 typedef struct {
     s32 madr;
     s32 bcr;
@@ -289,3 +311,12 @@ void dma_execute(s32 id, void* addr, u32 blocks, u32 size, u32 control,
         ret = *ptr;
     } while (0);
 }
+#else
+void dma_execute(s32 id, void* addr, u32 blocks, u32 size, u32 control,
+                 u_char arg5, u32 arg6) {
+    CD_getsector(addr, size);
+    if (arg5 == 1) {
+        Psyz_KernelDmaComplete(DMA_CHANNEL_CD);
+    }
+}
+#endif

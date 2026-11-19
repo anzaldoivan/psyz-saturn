@@ -10,6 +10,11 @@ extern "C" {
 
 extern int CD_debug;
 
+#ifdef __psyz
+int CD_getsector(void* madr, int size);
+void Psyz_KernelDmaComplete(int channel);
+#endif
+
 #ifdef __cplusplus
 }
 #endif
