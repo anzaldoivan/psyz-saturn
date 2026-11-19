@@ -336,6 +336,7 @@ void Psyz_GpuDisplayCommand(unsigned int cmd) {
     unsigned char op = (cmd >> 24) & 0x3F;
     switch (op) {
     case 0:
+        GPU_STATUS = 0x14802000;
         Draw_Reset();
         break;
     case 1:
@@ -412,6 +413,12 @@ static int psyz_sync(int mode) {
 
 int psyz_gpu_version(int mode) {
     GPU_SyncIfPending();
+    switch (mode & 7) {
+    case 0:
+    case 5:
+        Psyz_GpuDisplayCommand(0); // GP1(00h) reset GPU
+        break;
+    }
     return GPU_V0;
 }
 

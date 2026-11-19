@@ -17,6 +17,7 @@
 #include <sys/prctl.h>
 #endif
 #include "../video_layout.h"
+#include "../video_private.h"
 #ifdef PLATFORM_IOS
 #include "../ios/ios_platform.h"
 #endif

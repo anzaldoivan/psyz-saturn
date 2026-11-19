@@ -1332,6 +1332,22 @@ unsigned char* Psyz_VideoAllocCapturedFrame(int* w, int* h) {
                      vram_render, display_area.x, display_area.y, *w, *h);
 }
 
+int Psyz_VideoGetCaptureState(PsyzVideoCaptureState* state) {
+    if (!state) {
+        return -1;
+    }
+    state->draw_x = draw_area_start.x;
+    state->draw_y = draw_area_start.y;
+    state->draw_w = draw_area_end.x - draw_area_start.x + 1;
+    state->draw_h = draw_area_end.y - draw_area_start.y + 1;
+    state->display_x = display_area.x;
+    state->display_y = display_area.y;
+    state->display_w = display_size.x;
+    state->display_h = display_size.y;
+    state->display_enabled = disp_on;
+    return 0;
+}
+
 unsigned char* Psyz_VideoAllocVramDump(int* w, int* h) {
     SyncCanvasesForRead();
     *w = VRAM_W;
@@ -1403,7 +1419,21 @@ static void ApplyDisplayPendingChanges() {
     }
 }
 
-void Draw_Reset() { NOT_IMPLEMENTED; }
+void Draw_Reset() {
+    ParamDrawTexpageMode texpage = {0};
+    DisplayMode mode = {0};
+    Draw_DisplayEnable(0);
+    Draw_DisplayArea(0, 0);
+    Draw_DisplayHorizontalRange(0x200, 0xC00);
+    Draw_DisplayVerticalRange(0x10, 0x100);
+    Draw_SetDisplayMode(&mode);
+    Draw_SetTexpageMode(&texpage);
+    Draw_SetTextureWindow(0, 0, 0, 0);
+    Draw_SetAreaStart(0, 0);
+    Draw_SetAreaEnd(0, 0);
+    Draw_SetOffset(0, 0);
+    Draw_SetMask(0, 0);
+}
 
 void Draw_DisplayEnable(unsigned int on) {
     disp_on = on;
