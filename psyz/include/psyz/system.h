@@ -91,6 +91,10 @@ void Psyz_AdjustPath(char* dst, const char* src, int maxlen);
  */
 void Psyz_AdjustPathCB(int (*callback)(char* dst, const char* src, int maxlen));
 
+// Plug (present != 0) or pull the card at chan (0x00, 0x10, ...); empty slots
+// time out
+void Psyz_CardSetPresent(long chan, int present);
+
 /**
  * @brief Return non-zero when the host requested application termination.
  *
