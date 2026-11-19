@@ -19,8 +19,9 @@ void _SsVmDoAllocate(void) {
         _svm_sreg_dirty[_svm_cur.voice] |= 8;
     }
     ((short*)_svm_sreg_buf)[_svm_cur.voiceOffset + 4] =
-        _svm_tn[_svm_cur.fake_program * 16 + _svm_cur.tone].adsr1;
+        le16((u8*)&_svm_tn[_svm_cur.fake_program * 16 + _svm_cur.tone].adsr1);
     ((short*)_svm_sreg_buf)[_svm_cur.voiceOffset + 5] =
-        _svm_tn[_svm_cur.fake_program * 16 + _svm_cur.tone].adsr2 + _svm_damper;
+        le16((u8*)&_svm_tn[_svm_cur.fake_program * 16 + _svm_cur.tone].adsr2) +
+        _svm_damper;
     _svm_sreg_dirty[_svm_cur.voice] |= 0x30;
 }

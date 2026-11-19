@@ -10,6 +10,13 @@ extern "C" {
 #include <libsnd.h>
 #include "../libspu/libspu_private.h"
 
+// VAB files are little-endian PS1 data
+static inline u16 le16(const u8* p) { return p[0] | p[1] << 8; }
+
+static inline u32 le32(const u8* p) {
+    return p[0] | p[1] << 8 | p[2] << 16 | (u32)p[3] << 24;
+}
+
 #define NUM_VOICES 24
 #define SEQ_FLAG_1 1
 #define SEQ_FLAG_2 2

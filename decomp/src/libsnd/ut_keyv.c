@@ -35,7 +35,7 @@ short SsUtKeyOnV(short voice, short vabId, short prog, short tone, short note,
     _svm_cur.prog_tones = _svm_pg[prog].tones;
     tn = _svm_cur.tone + (_svm_cur.fake_program * 16);
     _svm_cur.tone_prior = _svm_tn[tn].prior;
-    _svm_cur.tone_vag_idx = _svm_tn[tn].vag;
+    _svm_cur.tone_vag_idx = le16((u8*)&_svm_tn[tn].vag);
     _svm_cur.tone_vol = _svm_tn[tn].vol;
     _svm_cur.tone_pan = _svm_tn[tn].pan;
     _svm_cur.tone_center = _svm_tn[tn].center;

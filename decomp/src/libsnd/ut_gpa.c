@@ -8,7 +8,7 @@ short SsUtGetProgAtr(short vabId, short prog, ProgAtr* pProgAttr) {
         pProgAttr->prior = _svm_pg[prog].prior;
         pProgAttr->mode = _svm_pg[prog].mode;
         pProgAttr->mpan = _svm_pg[prog].mpan;
-        pProgAttr->attr = _svm_pg[prog].attr;
+        pProgAttr->attr = le16((u8*)&_svm_pg[prog].attr);
         return 0;
     }
     return -1;
