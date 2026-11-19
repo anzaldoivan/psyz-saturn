@@ -53,3 +53,16 @@ int Psyz_OsThreadStart(void (*fn)(void), const char* name) {
     sceKernelStartThread(thid, sizeof(fn), &fn);
     return 0;
 }
+
+// No fibres: OpenTh fails.
+void* Psyz_OsFiberSelf(void) { return NULL; }
+void* Psyz_OsFiberCreate(void (*fn)(void), unsigned int stack_size) {
+    (void)fn;
+    (void)stack_size;
+    return NULL;
+}
+void Psyz_OsFiberSwitch(void* from, void* to) {
+    (void)from;
+    (void)to;
+}
+void Psyz_OsFiberDestroy(void* fiber) { (void)fiber; }

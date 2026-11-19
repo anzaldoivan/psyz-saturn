@@ -703,7 +703,7 @@ unsigned long OpenTh(
  * @param thread Thread descriptor
  * @return 1 on success, 0 on failure.
  */
-long closeTh(unsigned long thread);
+long CloseTh(unsigned long thread);
 
 /**
  * @brief Change the thread to be executed

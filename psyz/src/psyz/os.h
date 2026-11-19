@@ -27,4 +27,10 @@ void Psyz_OsBellWait(void* bell, uint32_t timeout_us);
 // Returns 0 on success, -1 when the host cannot run threads.
 int Psyz_OsThreadStart(void (*fn)(void), const char* name);
 
+// Cooperative contexts on this thread (NULL: none); never destroy a running one
+void* Psyz_OsFiberSelf(void);
+void* Psyz_OsFiberCreate(void (*fn)(void), unsigned int stack_size);
+void Psyz_OsFiberSwitch(void* from, void* to);
+void Psyz_OsFiberDestroy(void* fiber);
+
 #endif
