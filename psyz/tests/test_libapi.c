@@ -285,3 +285,168 @@ ZTEST(libetc, scratchpad_words) {
     zexpect_u32_eq(0x12345678, base[1]);
     zexpect_u32_eq(0x9ABCDEF0, base[255]);
 }
+
+#if !defined(__psx__) && !defined(__PSP__)
+#define MAIN_THREAD 0xFF000000ul
+
+static unsigned long ThreadNop(void) { return 0; }
+
+ZTEST(thread, open_returns_descriptor) {
+    unsigned long th[15];
+    th[0] = OpenTh(ThreadNop, 0, 0);
+    th[1] = OpenTh(ThreadNop, 0, 0);
+    zexpect_u32_eq(0xFF000001, th[0]);
+    zexpect_u32_eq(0xFF000002, th[1]);
+    zexpect_s32_eq(1, CloseTh(th[0]));
+    zexpect_s32_eq(0, CloseTh(th[0]));
+    zexpect_s32_eq(0, ChangeTh(th[0]));
+    th[0] = OpenTh(ThreadNop, 0, 0);
+    zexpect_u32_eq(0xFF000001, th[0]);
+    zexpect_s32_eq(0, CloseTh(MAIN_THREAD));
+    zexpect_s32_eq(0, CloseTh(0x12345678));
+    for (int i = 2; i < 15; i++) {
+        th[i] = OpenTh(ThreadNop, 0, 0);
+        zexpect_u32_eq(0xFF000000 | (i + 1), th[i]);
+    }
+    zexpect_s32_eq(1, OpenTh(ThreadNop, 0, 0) == (unsigned long)-1);
+    for (int i = 0; i < 15; i++) {
+        zexpect_s32_eq(1, CloseTh(th[i]));
+    }
+}
+
+#define RESUME_COUNT 8
+static int resume_seen[RESUME_COUNT];
+static int resume_len;
+
+static unsigned long ResumeEntry(void) {
+    for (int i = 0;; i++) {
+        if (resume_len < RESUME_COUNT) {
+            resume_seen[resume_len++] = i;
+        }
+        ChangeTh(MAIN_THREAD);
+    }
+}
+
+ZTEST(thread, change_resumes_where_it_left) {
+    volatile int guard = 0x5A5A;
+    long ret[RESUME_COUNT];
+    resume_len = 0;
+    unsigned long th = OpenTh(ResumeEntry, 0, 0);
+    for (int i = 0; i < RESUME_COUNT; i++) {
+        ret[i] = ChangeTh(th);
+    }
+    zexpect_s32_eq(RESUME_COUNT, resume_len);
+    for (int i = 0; i < RESUME_COUNT; i++) {
+        zexpect_s32_eq(1, ret[i]);
+        zexpect_s32_eq(i, resume_seen[i]);
+    }
+    zexpect_s32_eq(0x5A5A, guard);
+    zexpect_s32_eq(1, CloseTh(th));
+}
+
+#define TASK_COUNT 9
+#define TASK_SLOTS 4
+#define TASK_FRAMES 339
+static const int task_len[TASK_COUNT] = {
+    60, 100, 140, 180, 80, 120, 160, 90, 600};
+static int task_resumes[TASK_COUNT];
+static int task_done[TASK_COUNT];
+static int* task_addr[TASK_COUNT];
+static int task_running, task_bad;
+static int n_open, n_close, n_change;
+
+static unsigned long TaskOpen(unsigned long (*func)()) {
+    n_open++;
+    return OpenTh(func, 0, 0);
+}
+
+static long TaskClose(unsigned long th) {
+    n_close++;
+    return CloseTh(th);
+}
+
+static long TaskChange(unsigned long th) {
+    n_change++;
+    return ChangeTh(th);
+}
+
+static unsigned long TaskEntry(void) {
+    int id = task_running;
+    int local[16], sum = 0;
+    for (int i = 0; i < 16; i++) {
+        local[i] = id * 31 + i;
+        sum += local[i];
+    }
+    task_addr[id] = local;
+    for (int n = 1;; n++) {
+        int chk = 0;
+        for (int i = 0; i < 16; i++) {
+            chk += local[i];
+        }
+        if (id != task_running || n != task_resumes[id] || chk != sum) {
+            task_bad++;
+        }
+        if (n == task_len[id]) {
+            task_done[id] = 1;
+        }
+        TaskChange(MAIN_THREAD);
+    }
+}
+
+ZTEST(thread, task_slots_many_switches) {
+    int main_local = 0;
+    unsigned long th[TASK_SLOTS];
+    int task[TASK_SLOTS], next = 0;
+    memset(task_resumes, 0, sizeof(task_resumes));
+    memset(task_done, 0, sizeof(task_done));
+    task_bad = n_open = n_close = n_change = 0;
+    EnterCriticalSection();
+    for (int s = 0; s < TASK_SLOTS; s++) {
+        task[s] = next++;
+        th[s] = TaskOpen(TaskEntry);
+    }
+    ExitCriticalSection();
+    for (int frame = 0; frame < TASK_FRAMES; frame++) {
+        for (int s = 0; s < TASK_SLOTS; s++) {
+            if (task[s] < 0) {
+                continue;
+            }
+            task_running = task[s];
+            task_resumes[task[s]]++;
+            if (TaskChange(th[s]) != 1) {
+                task_bad++;
+            }
+        }
+        EnterCriticalSection();
+        for (int s = 0; s < TASK_SLOTS; s++) {
+            if (task[s] < 0 || !task_done[task[s]]) {
+                continue;
+            }
+            if (TaskClose(th[s]) != 1) {
+                task_bad++;
+            }
+            task[s] = next < TASK_COUNT ? next++ : -1;
+            if (task[s] >= 0) {
+                th[s] = TaskOpen(TaskEntry);
+            }
+        }
+        ExitCriticalSection();
+    }
+    zexpect_s32_eq(0, task_bad);
+    zexpect_s32_eq(9, n_open);
+    zexpect_s32_eq(8, n_close);
+    zexpect_s32_eq(2178, n_change);
+    for (int i = 0; i < TASK_SLOTS; i++) {
+        zexpect_ptr_ne(&main_local, task_addr[i]);
+        for (int j = i + 1; j < TASK_SLOTS; j++) {
+            zexpect_ptr_ne(task_addr[i], task_addr[j]);
+        }
+    }
+    // the last task is still running; close it uncounted
+    for (int s = 0; s < TASK_SLOTS; s++) {
+        if (task[s] >= 0) {
+            zexpect_s32_eq(1, CloseTh(th[s]));
+        }
+    }
+}
+#endif

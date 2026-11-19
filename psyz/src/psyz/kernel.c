@@ -476,6 +476,85 @@ void UnDeliverEvent(unsigned ev1, unsigned ev2) {
     KernelUnlock();
 }
 
+#define THREAD_COUNT 16
+#define THREAD_DESC 0xFF000000ul
+#define THREAD_STACK_SIZE (1u << 20)
+
+typedef struct {
+    void* fiber;
+    unsigned long (*func)();
+    int open;
+} Thread;
+
+// Slot 0 is the caller of the first ChangeTh, open from the start.
+static Thread threads[THREAD_COUNT] = {{NULL, NULL, 1}};
+static int thread_current;
+
+static int thread_at(unsigned long thread) {
+    unsigned long slot = thread & 0xFFFFFF;
+    if (thread >> 24 != 0xFF || slot >= THREAD_COUNT || !threads[slot].open) {
+        return -1;
+    }
+    return (int)slot;
+}
+
+static void thread_entry(void) {
+    threads[thread_current].func();
+    for (;;) {
+        ChangeTh(THREAD_DESC); // a returned thread has nowhere to go
+    }
+}
+
+unsigned long OpenTh(
+    unsigned long (*func)(), unsigned long sp, unsigned long gp) {
+    (void)sp;
+    (void)gp;
+    for (int i = 1; i < THREAD_COUNT; i++) {
+        Thread* t = &threads[i];
+        // a thread that closed itself still runs on its fibre
+        if (t->open || i == thread_current) {
+            continue;
+        }
+        if (t->fiber) {
+            Psyz_OsFiberDestroy(t->fiber);
+        }
+        t->fiber = Psyz_OsFiberCreate(thread_entry, THREAD_STACK_SIZE);
+        if (!t->fiber) {
+            break;
+        }
+        t->func = func;
+        t->open = 1;
+        return THREAD_DESC | (unsigned long)i;
+    }
+    return (unsigned long)-1;
+}
+
+long CloseTh(unsigned long thread) {
+    int slot = thread_at(thread);
+    if (slot <= 0) {
+        return 0;
+    }
+    threads[slot].open = 0;
+    return 1;
+}
+
+long ChangeTh(unsigned long thread) {
+    int slot = thread_at(thread);
+    if (slot < 0) {
+        return 0;
+    }
+    if (!threads[0].fiber && !(threads[0].fiber = Psyz_OsFiberSelf())) {
+        return 0;
+    }
+    if (slot == thread_current) {
+        return 1;
+    }
+    int from = thread_current;
+    thread_current = slot;
+    Psyz_OsFiberSwitch(threads[from].fiber, threads[slot].fiber);
+    return 1;
+}
+
 static int CounterLine(long spec) {
     unsigned i = (unsigned)spec & 0xFFFF;
     return i < 3 ? IRQ_RCNT0 + (int)i : i == 3 ? IRQ_VBLANK : -1;
