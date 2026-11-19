@@ -80,7 +80,7 @@ void SetDrawLoad(DR_LOAD* p, RECT* rect) {
 }
 
 int MargePrim(void* p0, void* p1) {
-#ifdef __psyz
+#if defined(__psyz) && !defined(PSYZ_PS1_OT)
     int len0 = getlen(p0);
     int len1 = getlen(p1);
     // includes both O_TAG of p1 and potential alignment padding on 64-bit

@@ -128,7 +128,11 @@ extern int (*GPU_printf)(); /* printf() object */
 #define getcode(p) (u_char)(((P_TAG*)(p))->code)
 #define getaddr(p) (u_long)(((P_TAG*)(p))->addr)
 
-#ifdef __psyz
+#if defined(__psyz) && defined(PSYZ_PS1_OT)
+void* Psyz_OtLink(u_long addr);
+#undef nextPrim
+#define nextPrim(p) Psyz_OtLink(((P_TAG*)(p))->addr) // a call per link
+#elif defined(__psyz)
 #undef nextPrim
 #define nextPrim(p) (void*)(((P_TAG*)(p))->addr)
 #else
@@ -204,7 +208,7 @@ typedef struct {
     int w, h; /**< Width and height of the rectangular area */
 } RECT32;
 
-#ifdef __psyz
+#if defined(__psyz) && !defined(PSYZ_PS1_OT)
 #define O_TAG                                                                  \
     u_long tag;                                                                \
     u_long len
@@ -217,7 +221,7 @@ typedef struct {
 #endif
 
 typedef struct {
-#ifndef __psyz
+#if !defined(__psyz) || defined(PSYZ_PS1_OT)
     unsigned addr : 24;
     unsigned len : 8;
 #else

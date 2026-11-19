@@ -1839,3 +1839,54 @@ ZTEST(gpu, vsync_callbacks_run_in_channel_order) {
     zexpect_s32_eq(3, vsync_order[1]);
     zexpect_s32_eq(7, vsync_order[2]);
 }
+
+#ifdef PSYZ_PS1_OT
+extern u_long D_800B89E4[];
+
+static OT_TYPE ps1_ot[8];
+static TILE ps1_tile[2];
+
+ZTEST_SETUP(ps1_ot) { gpu_setup(); }
+ZTEST_TEARDOWN(ps1_ot) { gpu_teardown(); }
+
+ZTEST(ps1_ot, link_restores_host_pointer) {
+    SetTile(&ps1_tile[0]);
+    SetTile(&ps1_tile[1]);
+    catPrim(&ps1_tile[0], &ps1_tile[1]);
+    zexpect_u32_eq((uintptr_t)&ps1_tile[1] & 0xFFFFFF, getaddr(&ps1_tile[0]));
+    zexpect_ptr_eq(&ps1_tile[1], nextPrim(&ps1_tile[0]));
+    catPrim(&ps1_tile[1], &ps1_tile[0]);
+    zexpect_ptr_eq(&ps1_tile[0], nextPrim(&ps1_tile[1]));
+}
+
+ZTEST(ps1_ot, term_prim_ends_the_chain) {
+    SetTile(&ps1_tile[0]);
+    termPrim(&ps1_tile[0]);
+    zexpect_u32_eq(0xFFFFFF, getaddr(&ps1_tile[0]));
+    zexpect_s32_ne(0, isendprim(&ps1_tile[0]));
+}
+
+ZTEST(ps1_ot, empty_ot_reaches_the_terminator) {
+    u_short readback[16 * 16];
+    RECT rect = {0, 0, 16, 16};
+    void* p = &ps1_ot[LEN(ps1_ot) - 1];
+    int steps = 0;
+
+    ClearOTagR(ps1_ot, LEN(ps1_ot));
+    while (!isendprim(p) && steps <= LEN(ps1_ot)) {
+        p = nextPrim(p);
+        steps++;
+    }
+    zexpect_s32_eq(LEN(ps1_ot), steps);
+    zexpect_ptr_eq(D_800B89E4, p);
+
+    DrawOTag(&ps1_ot[LEN(ps1_ot) - 1]);
+    DrawSync(0);
+    memset(readback, 0xFF, sizeof(readback));
+    StoreImage(&rect, (u_long*)readback);
+    DrawSync(0);
+    for (int i = 0; i < LEN(readback); i++) {
+        zassert_u16_eq(0, readback[i]);
+    }
+}
+#endif
