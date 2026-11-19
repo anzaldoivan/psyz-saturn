@@ -87,7 +87,9 @@ static struct Debug info = {0};
 int D_800B89A8[] = {1024, 1024, 1024, 1024, 1024};
 int D_800B89BC[] = {512, 1024, 1024, 512, 1024};
 u_long move_image[] = {(4 << 24) | 0xFFFFFF, 0x80000000, 0, 0, 0};
-#if __psyz
+#if defined(__psyz) && defined(PSYZ_PS1_OT)
+u_long D_800B89E4[] = {0, 0, 0, 0, 0};
+#elif __psyz
 u_long D_800B89E4[] = {0xFFFFFF, 4, 0, 0, 0, 0};
 #else
 u_long D_800B89E4[] = {(4 << 24) | 0xFFFFFF, 0, 0, 0, 0};
@@ -275,8 +277,13 @@ int MoveImage(RECT* rect, int x, int y) {
         return -1;
     }
 #if __psyz
+#ifdef PSYZ_PS1_OT
+#define MOVE_IMAGE_DATA_INDEX 2
+    u_long move_image[5] = {0, 0, 0, 0, 0};
+#else
 #define MOVE_IMAGE_DATA_INDEX 3
     u_long move_image[6] = {0, 0, 0, 0, 0, 0};
+#endif
     setlen(move_image, 4);
     setcode(move_image, 0x80);
     termPrim(move_image);
@@ -302,6 +309,10 @@ OT_TYPE* ClearOTag(OT_TYPE* ot, int n) {
         ot++;
     }
 #ifdef __psyz
+#ifdef PSYZ_PS1_OT
+    termPrim(D_800B89E4);
+    setlen(D_800B89E4, 4);
+#endif
     setaddr(ot, D_800B89E4);
     setlen(ot, 0);
 #else
@@ -317,6 +328,10 @@ OT_TYPE* ClearOTagR(OT_TYPE* ot, int n) {
 
     D_800B8920->otc(ot, n);
 #ifdef __psyz
+#ifdef PSYZ_PS1_OT
+    termPrim(D_800B89E4);
+    setlen(D_800B89E4, 4);
+#endif
     setaddr(ot, D_800B89E4);
     setlen(ot, 0);
 #else

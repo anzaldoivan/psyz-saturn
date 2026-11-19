@@ -22,4 +22,6 @@ typedef struct {
     int (*sync)(int mode);
 } GpuVtable;
 
+extern u_long D_800B89E4[];
+
 #endif

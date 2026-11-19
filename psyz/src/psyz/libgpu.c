@@ -208,8 +208,8 @@ static void GPU_Enqueue(u_long* packets) {
     if (sizeof(u_long) == 4) {
         // fast path for 32-bit systems
         while (1) {
-            if (env->len > 0) {
-                DispatchPackets((u_long*)env->code, (int)env->len);
+            if (getlen(env) > 0) {
+                DispatchPackets((u_long*)env->code, (int)getlen(env));
             }
             if (isendprim(env)) {
                 break;
@@ -222,10 +222,7 @@ static void GPU_Enqueue(u_long* packets) {
         return;
     }
     while (1) {
-        if (queue_len + env->len > LEN(queue_buf)) {
-            if (env->len > 0x100) {
-                ERRORF("packet 0x%X long, likely corrupted", env->len);
-            }
+        if (queue_len + getlen(env) > LEN(queue_buf)) {
             INFOF("GPU queue full, flushing");
             GPU_Flush();
         }
@@ -239,18 +236,18 @@ static void GPU_Enqueue(u_long* packets) {
             if ((code >= 0x20 && code < 0x80) || getcode(env) == 0x02) {
                 // it is a prim, we need to split
                 u32* prim_data = (u32*)env->code;
-                for (u_long i = 0; i < env->len; i++) {
+                for (u_long i = 0; i < getlen(env); i++) {
                     queue_buf[queue_len + i] = prim_data[i];
                 }
-            } else if (env->len > 0) {
+            } else if (getlen(env) > 0) {
                 // TODO this is a temporary solution:
                 // if gpu commands get merged with primitives, this will not
                 // work
                 memcpy(queue_buf + queue_len, env->code,
-                       env->len * sizeof(u_long));
+                       getlen(env) * sizeof(u_long));
             }
         }
-        queue_len += (int)env->len;
+        queue_len += (int)getlen(env);
         if (isendprim(env)) {
             break;
         }
@@ -387,6 +384,14 @@ static int psyz_otc(OT_TYPE* ot, s32 n) {
     setlen(&ot[0], 0);
     return 0;
 }
+
+#if defined(PSYZ_PS1_OT) && !defined(PSYZ_NO_OT_LINK)
+// an OT link keeps the low 24 bits of the address; restore the 16 MiB window
+// that holds the static data, as the terminal packet D_800B89E4 is in it
+void* Psyz_OtLink(u_long addr) {
+    return (void*)(((uintptr_t)D_800B89E4 & ~(uintptr_t)0xFFFFFF) | addr);
+}
+#endif
 
 static int psyz_param(int _) {
     NOT_IMPLEMENTED;

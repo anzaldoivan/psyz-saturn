@@ -47,7 +47,7 @@ typedef unsigned char PACKET;
  * @brief Ordering table tag
  */
 typedef struct {
-#ifndef __psyz
+#if !defined(__psyz) || defined(PSYZ_PS1_OT)
     unsigned p : 24;
     unsigned char num : 8;
 #else

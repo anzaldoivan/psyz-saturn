@@ -45,7 +45,7 @@ typedef struct {
 
 #ifndef PACKET
 typedef struct {
-    O_TAG tag;
+    O_TAG;
     unsigned char code[3];
     unsigned char len;
 } PACKET;
@@ -53,7 +53,7 @@ typedef struct {
 
 #ifndef GsOT
 typedef struct {
-    O_TAG length;
+    unsigned long length;
     unsigned long* org;
 } GsOT;
 #endif
